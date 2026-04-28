@@ -2,6 +2,8 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { io, Socket } from "socket.io-client";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { appendHistory, readHistory, clearHistory, type HistoryItem } from "./lib/storage";
@@ -418,14 +420,42 @@ function App() {
 
   function downloadSelected() {
     const targets = incoming.filter(f => selectedIncoming.has(f.id) && f.status === "done" && f.downloadUrl);
-    targets.forEach((file) => {
-      const a = document.createElement("a");
-      a.href = file.downloadUrl!;
-      a.download = file.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    });
+    
+    if (Capacitor.isNativePlatform()) {
+      targets.forEach((file) => saveNativeFile(file));
+    } else {
+      targets.forEach((file) => {
+        const a = document.createElement("a");
+        a.href = file.downloadUrl!;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+    }
+  }
+
+  async function saveNativeFile(file: IncomingFile) {
+    if (!file.chunks || file.chunks.length === 0) return;
+    const blob = new Blob(file.chunks, { type: file.type || "application/octet-stream" });
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = async () => {
+      const base64data = reader.result as string;
+      const base64 = base64data.split(',')[1];
+      try {
+        await Filesystem.writeFile({
+          path: `Download/PeerDash_${file.name}`,
+          data: base64,
+          directory: Directory.ExternalStorage,
+          recursive: true
+        });
+        alert(`Saved ${file.name} to Downloads folder.`);
+      } catch (e) {
+        console.error(e);
+        alert(`Failed to save ${file.name}`);
+      }
+    };
   }
 
   function toggleSelection(id: string) {
@@ -743,7 +773,8 @@ function App() {
                 </div>
                 <div className="row-actions">
                   <progress max={100} value={file.progress} />
-                  {file.downloadUrl ? <a className="download" href={file.downloadUrl} download={file.name}>Save</a> : null}
+                  {file.downloadUrl && !Capacitor.isNativePlatform() ? <a className="download" href={file.downloadUrl} download={file.name}>Save</a> : null}
+                  {file.downloadUrl && Capacitor.isNativePlatform() ? <button className="download" onClick={() => saveNativeFile(file)}>Save</button> : null}
                 </div>
               </article>
             )})}
