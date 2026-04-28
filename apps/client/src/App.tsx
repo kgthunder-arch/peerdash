@@ -259,10 +259,15 @@ function App() {
     channel.binaryType = "arraybuffer";
     channel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
 
-    channel.onopen = () => {
+    const onOpen = () => {
       setState("connected");
       setStatusText("Peer locked in. Files will move directly device to device.");
     };
+
+    channel.onopen = onOpen;
+    if (channel.readyState === "open") {
+      onOpen();
+    }
 
     channel.onmessage = (event) => {
       if (typeof event.data === "string") {
