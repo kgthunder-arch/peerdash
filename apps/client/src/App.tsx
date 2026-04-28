@@ -128,6 +128,7 @@ function App() {
   const [transferSpeed, setTransferSpeed] = useState(0);
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [selectedIncoming, setSelectedIncoming] = useState<Set<string>>(new Set());
 
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -309,6 +310,7 @@ function App() {
       movedBytesRef.current = 0;
       setPeerName(message.senderName);
       setIncoming(items);
+      setSelectedIncoming(new Set(items.map(item => item.id)));
       setNote(message.note);
       setStatusText(`Incoming batch ready: ${items.length} item(s) from ${message.senderName}.`);
     }
@@ -414,17 +416,33 @@ function App() {
     }
   }
 
-  async function downloadAll() {
-    if (incoming.length === 0) return;
-    const zip = new JSZip();
-    incoming.forEach((file) => {
-      if (file.status === "done" && file.chunks.length > 0) {
-        const blob = new Blob(file.chunks, { type: file.type || "application/octet-stream" });
-        zip.file(file.relativePath || file.name, blob);
-      }
+  function downloadSelected() {
+    const targets = incoming.filter(f => selectedIncoming.has(f.id) && f.status === "done" && f.downloadUrl);
+    targets.forEach((file) => {
+      const a = document.createElement("a");
+      a.href = file.downloadUrl!;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     });
-    const content = await zip.generateAsync({ type: "blob" });
-    saveAs(content, `PeerDash_${roomCode}_Transfer.zip`);
+  }
+
+  function toggleSelection(id: string) {
+    setSelectedIncoming((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIncoming.size === incoming.length) {
+      setSelectedIncoming(new Set());
+    } else {
+      setSelectedIncoming(new Set(incoming.map(f => f.id)));
+    }
   }
 
   function handleClearHistory() {
@@ -701,8 +719,11 @@ function App() {
               <p>{incoming.length} items · {formatBytes(totalIncoming)}</p>
             </div>
             <div className="actions">
-              <button className="primary" onClick={downloadAll} disabled={!incoming.some(f => f.status === "done")}>
-                Download All (.zip)
+              <button onClick={toggleSelectAll} disabled={incoming.length === 0}>
+                {selectedIncoming.size === incoming.length && incoming.length > 0 ? "Deselect All" : "Select All"}
+              </button>
+              <button className="primary" onClick={downloadSelected} disabled={selectedIncoming.size === 0 || !incoming.some(f => selectedIncoming.has(f.id) && f.status === "done")}>
+                Download Selected
               </button>
             </div>
           </div>
@@ -713,6 +734,7 @@ function App() {
               return (
               <article key={file.id} className="row">
                 <div className="row-info">
+                  <input type="checkbox" checked={selectedIncoming.has(file.id)} onChange={() => toggleSelection(file.id)} />
                   {isImage && file.downloadUrl ? <img src={file.downloadUrl} className="thumb" alt="preview" /> : null}
                   <div>
                     <strong>{file.relativePath}</strong>
