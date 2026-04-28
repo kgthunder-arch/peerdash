@@ -1,0 +1,235 @@
+:root {
+  font-family: "Segoe UI", "Inter", sans-serif;
+  color: #f4f7fb;
+  background:
+    radial-gradient(circle at top left, rgba(64, 149, 255, 0.24), transparent 30%),
+    radial-gradient(circle at top right, rgba(55, 212, 170, 0.18), transparent 25%),
+    linear-gradient(180deg, #08111d 0%, #0d1727 100%);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button,
+.button-like,
+.download {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.8rem 1.15rem;
+  background: rgba(244, 247, 251, 0.08);
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button.primary {
+  background: linear-gradient(135deg, #37d4aa, #4095ff);
+  color: #07111b;
+  font-weight: 700;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+
+.hero h1 {
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  line-height: 0.95;
+  margin: 0.35rem 0 1rem;
+  max-width: 10ch;
+}
+
+.hero p,
+.panel p,
+.muted {
+  color: rgba(244, 247, 251, 0.72);
+}
+
+.hero-card,
+.panel {
+  background: rgba(9, 15, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  padding: 1.2rem;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+}
+
+.eyebrow,
+.status-pill,
+.chip {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cde6ff;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.metrics div {
+  padding: 0.9rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.metrics strong {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.grid.two {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  padding: 0.9rem 1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.qr {
+  width: min(100%, 220px);
+  border-radius: 18px;
+  margin-top: 0.5rem;
+}
+
+.panel-head,
+.row,
+.row-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.row {
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row p,
+.row strong {
+  margin: 0;
+}
+
+.row-actions {
+  min-width: min(320px, 100%);
+}
+
+progress {
+  width: 100%;
+  height: 10px;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+@media (max-width: 920px) {
+  .hero,
+  .grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head,
+  .row,
+  .row-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel.drag-active {
+  border-color: #4095ff;
+  background: rgba(64, 149, 255, 0.1);
+  box-shadow: 0 0 20px rgba(64, 149, 255, 0.2);
+}
+
+.row-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
