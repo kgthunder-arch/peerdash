@@ -20,6 +20,8 @@ out/
 # release/
 
 # Gradle files
+*.keystore
+keystore.properties
 .gradle/
 build/
 
