@@ -31,17 +31,35 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (sockets.size >= 2) {
-      socket.emit("error", { message: "This room already has two devices connected." });
-      return;
-    }
-
     socket.join(roomCode);
-    io.to(roomCode).emit("ready", { roomCode, peerName });
+    // Notify the room that a new peer has joined, passing their socket ID
+    socket.to(roomCode).emit("peer-joined", { roomCode, peerName, socketId: socket.id });
+    // Tell the joiner they are connected to the room
+    socket.emit("ready", { roomCode, peerName });
   });
 
-  socket.on("signal", ({ roomCode, payload }: { roomCode: string; payload: unknown }) => {
-    socket.to(roomCode).emit("signal", { payload });
+  socket.on("signal", ({ roomCode, target, payload }: { roomCode: string; target?: string; payload: unknown }) => {
+    if (target) {
+      io.to(target).emit("signal", { payload, sender: socket.id });
+    } else {
+      socket.to(roomCode).emit("signal", { payload, sender: socket.id });
+    }
+  });
+
+  socket.on("relay-data", ({ roomCode, target, data }: { roomCode: string; target?: string; data: Buffer }) => {
+    if (target) {
+      io.to(target).emit("relay-data", { data, sender: socket.id });
+    } else {
+      socket.to(roomCode).emit("relay-data", { data, sender: socket.id });
+    }
+  });
+
+  socket.on("relay-control", ({ roomCode, target, message }: { roomCode: string; target?: string; message: any }) => {
+    if (target) {
+      io.to(target).emit("relay-control", { message, sender: socket.id });
+    } else {
+      socket.to(roomCode).emit("relay-control", { message, sender: socket.id });
+    }
   });
 
   socket.on("disconnecting", () => {

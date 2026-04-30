@@ -315,3 +315,62 @@ progress {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* Light Theme Overrides */
+:root[data-theme='light'] {
+  color: #08111d;
+}
+
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(circle at top left, rgba(64, 149, 255, 0.15), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(55, 212, 170, 0.1), transparent 40%),
+    linear-gradient(180deg, #e4e9f2 0%, #f4f7fb 100%);
+}
+
+:root[data-theme='light'] .hero p,
+:root[data-theme='light'] .panel p,
+:root[data-theme='light'] .muted {
+  color: rgba(8, 17, 29, 0.72);
+}
+
+:root[data-theme='light'] .hero-card,
+:root[data-theme='light'] .panel {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root[data-theme='light'] button,
+:root[data-theme='light'] .button-like,
+:root[data-theme='light'] .download {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme='light'] button:hover:not(:disabled),
+:root[data-theme='light'] .button-like:hover,
+:root[data-theme='light'] .download:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme='light'] .eyebrow,
+:root[data-theme='light'] .status-pill,
+:root[data-theme='light'] .chip {
+  background: rgba(0, 0, 0, 0.08);
+  color: #0d4a8f;
+}
+
+:root[data-theme='light'] input,
+:root[data-theme='light'] textarea {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme='light'] .metrics div {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme='light'] .row {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+

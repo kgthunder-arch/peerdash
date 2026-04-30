@@ -1,0 +1,26 @@
+{
+  "name": "PeerDash",
+  "short_name": "PeerDash",
+  "description": "Faster direct file transfer with an InShare-style room flow.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08111d",
+  "theme_color": "#08111d",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}

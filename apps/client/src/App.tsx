@@ -29,6 +29,7 @@ type IncomingFile = {
   transferredBytes: number;
   chunks: Uint8Array[];
   downloadUrl?: string;
+  opfsHandle?: any;
 };
 type FileMeta = {
   id: string;
@@ -64,7 +65,8 @@ function makeRoomCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function playBeep(frequency = 440, duration = 100) {
+function playBeep(frequency = 440, duration = 100, muted = false) {
+  if (muted) return;
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -131,16 +133,61 @@ function App() {
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedIncoming, setSelectedIncoming] = useState<Set<string>>(new Set());
+  const [isMuted, setIsMuted] = useState(false);
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
+  const fallbackModeRef = useRef(false);
+  const targetSocketIdRef = useRef<string | null>(null);
   const sendPausedRef = useRef<Record<string, boolean>>({});
   const incomingRef = useRef<Map<string, IncomingFile>>(new Map());
   const activeSendRef = useRef(false);
   const movedBytesRef = useRef(0);
   const totalBytesRef = useRef(0);
   const speedWindowRef = useRef<{ time: number; bytes: number }[]>([]);
+
+  function sendControl(msg: ControlMessage) {
+    if (fallbackModeRef.current || !channelRef.current || channelRef.current.readyState !== "open") {
+      socketRef.current?.emit("relay-control", { roomCode, target: targetSocketIdRef.current, message: msg });
+    } else {
+      channelRef.current.send(JSON.stringify(msg));
+    }
+  }
+
+  function sendData(packet: Uint8Array) {
+    if (fallbackModeRef.current || !channelRef.current || channelRef.current.readyState !== "open") {
+      socketRef.current?.emit("relay-data", { roomCode, target: targetSocketIdRef.current, data: packet });
+    } else {
+      channelRef.current.send(packet);
+    }
+  }
+
+  async function handleIncomingBinary(data: ArrayBuffer) {
+    const bytes = new Uint8Array(data);
+    const idLength = bytes[0];
+    const fileId = decoder.decode(bytes.slice(1, idLength + 1));
+    const chunk = bytes.slice(idLength + 1);
+    const file = incomingRef.current.get(fileId);
+    if (!file) return;
+
+    if (file.opfsHandle) {
+      await file.opfsHandle.write(chunk);
+    } else {
+      file.chunks.push(chunk);
+    }
+
+    file.transferredBytes += chunk.byteLength;
+    file.progress = Math.min((file.transferredBytes / file.size) * 100, 100);
+    file.status = "receiving";
+    updateSpeed(chunk.byteLength);
+    setIncoming((current) => current.map((entry) => (entry.id === fileId ? { ...file } : entry)));
+  }
 
   const totalOutgoing = useMemo(() => files.reduce((sum, item) => sum + item.file.size, 0), [files]);
   const sentBytes = useMemo(() => files.reduce((sum, item) => sum + item.transferredBytes, 0), [files]);
@@ -160,28 +207,50 @@ function App() {
       setQrData(await makeQrData(`${window.location.origin}?room=${nextCode}`));
     });
 
-    socket.on("ready", async ({ roomCode: activeCode, peerName: nextPeer }: { roomCode: string; peerName: string }) => {
-      setRoomCode(activeCode);
-      setPeerName(nextPeer);
-      setState("connecting");
-      setStatusText("Peer detected. Building the direct lane.");
-      playBeep(880, 150);
-      await ensurePeerConnection(role === "sender", activeCode);
+    socket.on("peer-joined", async ({ roomCode: activeCode, peerName: nextPeer, socketId }: { roomCode: string; peerName: string; socketId: string }) => {
+      if (role === "sender") {
+        setPeerName(nextPeer);
+        setState("connecting");
+        setStatusText("Peer detected. Building the direct lane.");
+        targetSocketIdRef.current = socketId;
+        playBeep(880, 150);
+        await ensurePeerConnection(true, activeCode, socketId);
+      }
     });
 
-    socket.on("signal", async ({ payload }: { payload: RTCSessionDescriptionInit | RTCIceCandidateInit }) => {
+    socket.on("ready", async ({ roomCode: activeCode, peerName: nextPeer }: { roomCode: string; peerName: string }) => {
+      if (role === "receiver") {
+        setRoomCode(activeCode);
+        setPeerName(nextPeer);
+        setState("connecting");
+        setStatusText("Sender detected. Building the direct lane.");
+        playBeep(880, 150);
+        await ensurePeerConnection(false, activeCode);
+      }
+    });
+
+    socket.on("signal", async ({ payload, sender }: { payload: RTCSessionDescriptionInit | RTCIceCandidateInit, sender: string }) => {
       const peer = peerRef.current;
       if (!peer) return;
       if ("type" in payload) {
         await peer.setRemoteDescription(payload);
         if (payload.type === "offer") {
+          targetSocketIdRef.current = sender;
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
-          socket.emit("signal", { roomCode: roomCode || joinCode.toUpperCase(), payload: answer });
+          socket.emit("signal", { roomCode: roomCode || joinCode.toUpperCase(), target: sender, payload: answer });
         }
       } else if (payload.candidate) {
         await peer.addIceCandidate(payload).catch(() => undefined);
       }
+    });
+
+    socket.on("relay-control", async ({ message }: { message: ControlMessage }) => {
+      await handleControlMessage(message);
+    });
+
+    socket.on("relay-data", ({ data }: { data: ArrayBuffer }) => {
+      handleIncomingBinary(data);
     });
 
     socket.on("peer-left", () => {
@@ -222,14 +291,14 @@ function App() {
     setEtaSeconds(speed > 0 ? Math.ceil(pending / speed) : null);
   }
 
-  async function ensurePeerConnection(isInitiator: boolean, activeCode: string) {
+  async function ensurePeerConnection(isInitiator: boolean, activeCode: string, targetId?: string) {
     if (peerRef.current) return;
     const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerRef.current = peer;
 
     peer.onicecandidate = (event) => {
       if (event.candidate) {
-        socketRef.current?.emit("signal", { roomCode: activeCode, payload: event.candidate.toJSON() });
+        socketRef.current?.emit("signal", { roomCode: activeCode, target: targetId, payload: event.candidate.toJSON() });
       }
     };
 
@@ -239,8 +308,9 @@ function App() {
         setStatusText("Direct lane ready. Files can move now.");
       }
       if (peer.connectionState === "failed") {
-        setState("error");
-        setStatusText("Direct connection failed. Try again on the same Wi-Fi or hotspot.");
+        fallbackModeRef.current = true;
+        setState("connected");
+        setStatusText("Direct connection failed. Switched to Relay mode (slower).");
       }
     };
 
@@ -253,7 +323,7 @@ function App() {
       setupChannel(channel);
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      socketRef.current?.emit("signal", { roomCode: activeCode, payload: offer });
+      socketRef.current?.emit("signal", { roomCode: activeCode, target: targetId, payload: offer });
     }
   }
 
@@ -277,24 +347,11 @@ function App() {
         handleControlMessage(JSON.parse(event.data) as ControlMessage);
         return;
       }
-
-      const bytes = new Uint8Array(event.data as ArrayBuffer);
-      const idLength = bytes[0];
-      const fileId = decoder.decode(bytes.slice(1, idLength + 1));
-      const chunk = bytes.slice(idLength + 1);
-      const file = incomingRef.current.get(fileId);
-      if (!file) return;
-
-      file.chunks.push(chunk);
-      file.transferredBytes += chunk.byteLength;
-      file.progress = Math.min((file.transferredBytes / file.size) * 100, 100);
-      file.status = "receiving";
-      updateSpeed(chunk.byteLength);
-      setIncoming((current) => current.map((entry) => (entry.id === fileId ? { ...file } : entry)));
+      handleIncomingBinary(event.data as ArrayBuffer);
     };
   }
 
-  function handleControlMessage(message: ControlMessage) {
+  async function handleControlMessage(message: ControlMessage) {
     if (message.type === "manifest") {
       const items = message.files.map<IncomingFile>((file) => ({
         id: file.id,
@@ -327,6 +384,18 @@ function App() {
 
     if (message.type === "file-start") {
       setState("transferring");
+      const file = incomingRef.current.get(message.fileId);
+      if (file && navigator.storage && navigator.storage.getDirectory) {
+        try {
+          const root = await navigator.storage.getDirectory();
+          const handle = await root.getFileHandle(file.id, { create: true });
+          if (handle.createWritable) {
+            file.opfsHandle = await handle.createWritable();
+          }
+        } catch (e) {
+          console.warn("OPFS stream failed, falling back to memory chunks", e);
+        }
+      }
     }
 
     if (message.type === "file-complete") {
@@ -334,7 +403,21 @@ function App() {
       if (!file) return;
       file.progress = 100;
       file.status = "done";
-      file.downloadUrl = URL.createObjectURL(new Blob(file.chunks, { type: file.type || "application/octet-stream" }));
+      
+      if (file.opfsHandle) {
+        try {
+          await file.opfsHandle.close();
+          const root = await navigator.storage.getDirectory();
+          const handle = await root.getFileHandle(file.id);
+          const blob = await handle.getFile();
+          file.downloadUrl = URL.createObjectURL(blob);
+        } catch (e) {
+          console.error("Failed to read from OPFS", e);
+        }
+      } else {
+        file.downloadUrl = URL.createObjectURL(new Blob(file.chunks, { type: file.type || "application/octet-stream" }));
+      }
+      
       setIncoming((current) => current.map((entry) => (entry.id === file.id ? { ...file } : entry)));
     }
 
@@ -435,6 +518,54 @@ function App() {
     }
   }
 
+  async function downloadSelectedAsZip() {
+    const targets = incoming.filter(f => selectedIncoming.has(f.id) && f.status === "done");
+    if (targets.length === 0) return;
+
+    const zip = new JSZip();
+    targets.forEach((file) => {
+      if (file.chunks && file.chunks.length > 0) {
+        const blob = new Blob(file.chunks, { type: file.type || "application/octet-stream" });
+        zip.file(file.relativePath || file.name, blob);
+      }
+    });
+
+    try {
+      setStatusText("Generating ZIP archive... please wait.");
+      const content = await zip.generateAsync({ type: "blob" });
+      
+      if (Capacitor.isNativePlatform()) {
+        const reader = new FileReader();
+        reader.readAsDataURL(content);
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const base64 = base64data.split(',')[1];
+          try {
+            await Filesystem.writeFile({
+              path: `Download/PeerDash_${Date.now()}.zip`,
+              data: base64,
+              directory: Directory.ExternalStorage,
+              recursive: true
+            });
+            alert(`Saved ZIP to Downloads folder.`);
+            setStatusText("Transfer finished. Everything is ready to save.");
+          } catch (e) {
+            console.error(e);
+            alert(`Failed to save ZIP`);
+            setStatusText("Failed to save ZIP.");
+          }
+        };
+      } else {
+        saveAs(content, `PeerDash_${Date.now()}.zip`);
+        setStatusText("Transfer finished. Everything is ready to save.");
+      }
+    } catch (e) {
+      console.error("ZIP generation failed", e);
+      alert("Failed to generate ZIP");
+      setStatusText("Failed to generate ZIP.");
+    }
+  }
+
   async function saveNativeFile(file: IncomingFile) {
     if (!file.chunks || file.chunks.length === 0) return;
     const blob = new Blob(file.chunks, { type: file.type || "application/octet-stream" });
@@ -482,36 +613,37 @@ function App() {
 
   function pauseFile(fileId: string) {
     sendPausedRef.current[fileId] = true;
-    channelRef.current?.send(JSON.stringify({ type: "pause", fileId } satisfies ControlMessage));
+    sendControl({ type: "pause", fileId });
     setFiles((current) => current.map((item) => (item.id === fileId ? { ...item, status: "paused" } : item)));
   }
 
   function resumeFile(fileId: string) {
     sendPausedRef.current[fileId] = false;
-    channelRef.current?.send(JSON.stringify({ type: "resume", fileId } satisfies ControlMessage));
+    sendControl({ type: "resume", fileId });
     setFiles((current) => current.map((item) => (item.id === fileId ? { ...item, status: "queued" } : item)));
     void sendQueuedFiles();
   }
 
   function cancelFile(fileId: string) {
     sendPausedRef.current[fileId] = true;
-    channelRef.current?.send(JSON.stringify({ type: "cancel", fileId } satisfies ControlMessage));
+    sendControl({ type: "cancel", fileId });
     setFiles((current) => current.map((item) => (item.id === fileId ? { ...item, status: "canceled" } : item)));
   }
 
   async function sendText() {
-    if (!sharedText.trim() || !channelRef.current) return;
-    channelRef.current.send(JSON.stringify({
+    if (!sharedText.trim()) return;
+    sendControl({
       type: "text-share",
       text: sharedText.trim(),
       senderName: deviceName,
       createdAt: new Date().toISOString()
-    } satisfies ControlMessage));
+    });
     setReceivedTexts((current) => [`You: ${sharedText.trim()}`, ...current].slice(0, 6));
     setSharedText("");
   }
 
   async function waitForBuffer(channel: RTCDataChannel) {
+    if (fallbackModeRef.current) return;
     if (channel.bufferedAmount <= BUFFER_HIGH_WATER) return;
     await new Promise<void>((resolve) => {
       const onLow = () => {
@@ -535,8 +667,7 @@ function App() {
   }
 
   async function sendQueuedFiles() {
-    const channel = channelRef.current;
-    if (!channel || channel.readyState !== "open" || activeSendRef.current) return;
+    if (!fallbackModeRef.current && (!channelRef.current || channelRef.current.readyState !== "open" || activeSendRef.current)) return;
     const activeFiles = files.filter((file) => file.status !== "canceled" && file.status !== "done");
     if (activeFiles.length === 0) return;
 
@@ -545,7 +676,7 @@ function App() {
     movedBytesRef.current = 0;
     speedWindowRef.current = [];
 
-    channel.send(JSON.stringify({
+    sendControl({
       type: "manifest",
       files: files.filter((file) => file.status !== "canceled").map<FileMeta>((file) => ({
         id: file.id,
@@ -556,16 +687,16 @@ function App() {
       })),
       note,
       senderName: deviceName
-    } satisfies ControlMessage));
+    });
 
     if (note.trim()) {
-      channel.send(JSON.stringify({ type: "transfer-note", text: note.trim(), senderName: deviceName } satisfies ControlMessage));
+      sendControl({ type: "transfer-note", text: note.trim(), senderName: deviceName });
     }
 
     setState("transferring");
 
     for (const item of activeFiles) {
-      channel.send(JSON.stringify({ type: "file-start", fileId: item.id } satisfies ControlMessage));
+      sendControl({ type: "file-start", fileId: item.id });
       setFiles((current) => current.map((file) => (file.id === item.id ? { ...file, status: "sending" } : file)));
 
       let offset = item.transferredBytes;
@@ -574,7 +705,7 @@ function App() {
           await waitWhilePaused(item.id);
         }
 
-        await waitForBuffer(channel);
+        await waitForBuffer(channelRef.current!);
 
         const slice = item.file.slice(offset, offset + CHUNK_SIZE);
         const bytes = new Uint8Array(await slice.arrayBuffer());
@@ -583,7 +714,7 @@ function App() {
         packet[0] = idBytes.length;
         packet.set(idBytes, 1);
         packet.set(bytes, 1 + idBytes.length);
-        channel.send(packet);
+        sendData(packet);
 
         offset += bytes.byteLength;
         updateSpeed(bytes.byteLength);
@@ -601,14 +732,14 @@ function App() {
         );
       }
 
-      channel.send(JSON.stringify({ type: "file-complete", fileId: item.id } satisfies ControlMessage));
+      sendControl({ type: "file-complete", fileId: item.id });
     }
 
-    channel.send(JSON.stringify({ type: "transfer-complete" } satisfies ControlMessage));
+    sendControl({ type: "transfer-complete" });
     setState("done");
     setStatusText("Batch sent. The receiver can save each finished item instantly.");
-    playBeep(523, 100);
-    setTimeout(() => playBeep(659, 150), 150);
+    playBeep(523, 100, isMuted);
+    setTimeout(() => playBeep(659, 150, isMuted), 150);
     appendHistory({
       id: makeId(),
       roomCode,
@@ -632,6 +763,14 @@ function App() {
             Send files, folders, text snippets, and quick notes between devices with QR join,
             chunked WebRTC streaming, queue controls, and local transfer history.
           </p>
+          <div className="actions" style={{ marginTop: '1rem' }}>
+            <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
+              {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
+            </button>
+            <button onClick={() => setIsMuted(m => !m)}>
+              {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+            </button>
+          </div>
         </div>
         <div className="hero-card">
           <div className="status-pill">{state.toUpperCase()}</div>
@@ -754,6 +893,9 @@ function App() {
               </button>
               <button className="primary" onClick={downloadSelected} disabled={selectedIncoming.size === 0 || !incoming.some(f => selectedIncoming.has(f.id) && f.status === "done")}>
                 Download Selected
+              </button>
+              <button onClick={downloadSelectedAsZip} disabled={selectedIncoming.size === 0 || !incoming.some(f => selectedIncoming.has(f.id) && f.status === "done")}>
+                Download as ZIP
               </button>
             </div>
           </div>
