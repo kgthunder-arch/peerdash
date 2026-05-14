@@ -14,6 +14,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
+    "peerjs": "^1.5.5",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

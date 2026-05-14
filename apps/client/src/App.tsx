@@ -2,6 +2,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { io, Socket } from "socket.io-client";
+import Peer, { DataConnection } from "peerjs";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import JSZip from "jszip";
@@ -54,7 +55,8 @@ type DeferredInstallPrompt = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
-const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? "http://localhost:3001";
+const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "");
+const PEER_PREFIX = "peerdash-room-";
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 const CHUNK_SIZE = 256 * 1024;
 const BUFFER_HIGH_WATER = 4 * 1024 * 1024;
@@ -148,6 +150,8 @@ function App() {
   }, [theme]);
 
   const socketRef = useRef<Socket | null>(null);
+  const peerJsRef = useRef<Peer | null>(null);
+  const peerDataRef = useRef<DataConnection | null>(null);
   const roleRef = useRef<Role>(null);
   const roomCodeRef = useRef("");
   const joinCodeRef = useRef("");
@@ -164,6 +168,10 @@ function App() {
   const speedWindowRef = useRef<{ time: number; bytes: number }[]>([]);
 
   function sendControl(msg: ControlMessage) {
+    if (peerDataRef.current?.open) {
+      peerDataRef.current.send(JSON.stringify(msg));
+      return;
+    }
     if (fallbackModeRef.current || !channelRef.current || channelRef.current.readyState !== "open") {
       socketRef.current?.emit("relay-control", { roomCode, target: targetSocketIdRef.current, message: msg });
     } else {
@@ -172,6 +180,10 @@ function App() {
   }
 
   function sendData(packet: Uint8Array) {
+    if (peerDataRef.current?.open) {
+      peerDataRef.current.send(packet.buffer.slice(packet.byteOffset, packet.byteOffset + packet.byteLength));
+      return;
+    }
     if (fallbackModeRef.current || !channelRef.current || channelRef.current.readyState !== "open") {
       socketRef.current?.emit("relay-data", { roomCode, target: targetSocketIdRef.current, data: packet });
     } else {
@@ -218,10 +230,17 @@ function App() {
   }, [joinCode]);
 
   useEffect(() => {
-    const socket = io(SIGNAL_URL, {
+    const socket = SIGNAL_URL ? io(SIGNAL_URL, {
       autoConnect: true,
       transports: ["websocket", "polling"]
-    });
+    }) : ({
+      connected: false,
+      on: () => undefined,
+      once: () => undefined,
+      emit: () => undefined,
+      connect: () => undefined,
+      disconnect: () => undefined
+    } as unknown as Socket);
     socketRef.current = socket;
 
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -321,6 +340,7 @@ function App() {
       socket.disconnect();
       channelRef.current?.close();
       peerRef.current?.close();
+      destroyPeerConnection();
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleInstalled);
     };
@@ -397,6 +417,59 @@ function App() {
       }
       handleIncomingBinary(event.data as ArrayBuffer);
     };
+  }
+
+  function setupPeerDataConnection(connection: DataConnection) {
+    peerDataRef.current = connection;
+
+    connection.on("open", () => {
+      fallbackModeRef.current = false;
+      setState("connected");
+      setSocketReady(true);
+      setPeerName(connection.peer.replace(PEER_PREFIX, "") || "Connected device");
+      setStatusText("Peer locked in. Files will move directly device to device.");
+    });
+
+    connection.on("data", (data) => {
+      if (typeof data === "string") {
+        handleControlMessage(JSON.parse(data) as ControlMessage);
+        return;
+      }
+
+      if (data instanceof ArrayBuffer) {
+        handleIncomingBinary(data);
+        return;
+      }
+
+      if (data instanceof Blob) {
+        data.arrayBuffer().then(handleIncomingBinary);
+        return;
+      }
+
+      if (ArrayBuffer.isView(data)) {
+        handleIncomingBinary(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+      }
+    });
+
+    connection.on("close", () => {
+      setState("idle");
+      setPeerName("Waiting for peer");
+      setStatusText("The other device disconnected. Create or join a room again.");
+      activeSendRef.current = false;
+    });
+
+    connection.on("error", () => {
+      setState("error");
+      setStatusText("Connection failed. Create a fresh room and join again.");
+      activeSendRef.current = false;
+    });
+  }
+
+  function destroyPeerConnection() {
+    peerDataRef.current?.close();
+    peerJsRef.current?.destroy();
+    peerDataRef.current = null;
+    peerJsRef.current = null;
   }
 
   async function handleControlMessage(message: ControlMessage) {
@@ -521,26 +594,68 @@ function App() {
 
   async function createRoom() {
     const nextCode = makeRoomCode();
+    destroyPeerConnection();
     setRole("sender");
     setRoomCode(nextCode);
     setJoinCode(nextCode);
     setState("signaling");
     setPeerName("Waiting for peer");
     setQrData(await makeQrData(`${window.location.origin}?room=${nextCode}`));
-    setStatusText(socketReady
-      ? "Room ready. Share the code or QR and wait for the receiver."
-      : "Room code is ready. Reconnecting to the signal server so another device can join.");
-    await emitWhenConnected("create-room", { roomCode: nextCode, peerName: deviceName });
+    setSocketReady(false);
+    setStatusText("Creating secure room...");
+
+    const peer = new Peer(`${PEER_PREFIX}${nextCode}`, {
+      config: { iceServers: ICE_SERVERS }
+    });
+    peerJsRef.current = peer;
+
+    peer.on("open", async () => {
+      setSocketReady(true);
+      setStatusText("Room ready. Share the code or QR and wait for the receiver.");
+      await emitWhenConnected("create-room", { roomCode: nextCode, peerName: deviceName });
+    });
+
+    peer.on("connection", (connection) => {
+      setPeerName((connection.metadata as { peerName?: string } | undefined)?.peerName ?? "Receiver");
+      setupPeerDataConnection(connection);
+    });
+
+    peer.on("error", () => {
+      setState("error");
+      setSocketReady(false);
+      setStatusText("Could not create that room. Try again with a fresh code.");
+    });
   }
 
   async function joinRoom() {
     const activeCode = joinCode.trim().toUpperCase();
     if (!activeCode) return;
+    destroyPeerConnection();
     setRole("receiver");
     setRoomCode(activeCode);
     setState("signaling");
-    setStatusText("Joining room and waiting for the sender handshake.");
-    await emitWhenConnected("join-room", { roomCode: activeCode, peerName: deviceName });
+    setSocketReady(false);
+    setStatusText("Joining room...");
+
+    const peer = new Peer(undefined, {
+      config: { iceServers: ICE_SERVERS }
+    });
+    peerJsRef.current = peer;
+
+    peer.on("open", async () => {
+      const connection = peer.connect(`${PEER_PREFIX}${activeCode}`, {
+        reliable: true,
+        metadata: { peerName: deviceName }
+      });
+      setupPeerDataConnection(connection);
+      await emitWhenConnected("join-room", { roomCode: activeCode, peerName: deviceName });
+    });
+
+    peer.on("error", () => {
+      setState("error");
+      setSocketReady(false);
+      setStatusText("Could not join that room. Check the code and keep the sender page open.");
+    });
   }
 
   async function installApp() {
@@ -738,6 +853,7 @@ function App() {
   }
 
   async function waitForBuffer(channel: RTCDataChannel) {
+    if (peerDataRef.current?.open) return;
     if (fallbackModeRef.current) return;
     if (channel.bufferedAmount <= BUFFER_HIGH_WATER) return;
     await new Promise<void>((resolve) => {
@@ -762,7 +878,9 @@ function App() {
   }
 
   async function sendQueuedFiles() {
-    if (!fallbackModeRef.current && (!channelRef.current || channelRef.current.readyState !== "open" || activeSendRef.current)) return;
+    const peerReady = Boolean(peerDataRef.current?.open);
+    if (!peerReady && !fallbackModeRef.current && (!channelRef.current || channelRef.current.readyState !== "open" || activeSendRef.current)) return;
+    if (activeSendRef.current) return;
     const activeFiles = files.filter((file) => file.status !== "canceled" && file.status !== "done");
     if (activeFiles.length === 0) return;
 
@@ -800,7 +918,9 @@ function App() {
           await waitWhilePaused(item.id);
         }
 
-        await waitForBuffer(channelRef.current!);
+        if (channelRef.current) {
+          await waitForBuffer(channelRef.current);
+        }
 
         const slice = item.file.slice(offset, offset + CHUNK_SIZE);
         const bytes = new Uint8Array(await slice.arrayBuffer());
