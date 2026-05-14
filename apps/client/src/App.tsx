@@ -58,7 +58,7 @@ type DeferredInstallPrompt = Event & {
 type AppSection = "connect" | "send" | "receive" | "tools" | "history";
 
 const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "");
-const PEER_PREFIX = "peerdash-room-";
+const PEER_PREFIX = "pd";
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:openrelay.metered.ca:80" },
@@ -478,7 +478,7 @@ function App() {
       fallbackModeRef.current = false;
       setState("connected");
       setSocketReady(true);
-      setPeerName(connection.peer.replace(PEER_PREFIX, "") || "Connected device");
+      setPeerName(connection.metadata?.peerName ?? (connection.peer.replace(PEER_PREFIX, "").toUpperCase() || "Connected device"));
       setStatusText("Peer locked in. Files will move directly device to device.");
     });
 
@@ -716,7 +716,7 @@ function App() {
     setSocketReady(false);
     setStatusText("Creating secure room...");
 
-    const peer = new Peer(`${PEER_PREFIX}${nextCode}`, PEER_OPTIONS);
+    const peer = new Peer(`${PEER_PREFIX}${nextCode.toLowerCase()}`, PEER_OPTIONS);
     peerJsRef.current = peer;
 
     peer.on("open", async () => {
@@ -730,10 +730,10 @@ function App() {
       setupPeerDataConnection(connection);
     });
 
-    peer.on("error", () => {
+    peer.on("error", (error) => {
       setState("error");
       setSocketReady(false);
-      setStatusText("Could not create that room. Try again with a fresh code.");
+      setStatusText(`Could not create that room: ${error?.type ?? error?.message ?? "unknown error"}. Try again.`);
     });
   }
 
@@ -752,7 +752,7 @@ function App() {
     peerJsRef.current = peer;
 
     peer.on("open", async () => {
-      const connection = peer.connect(`${PEER_PREFIX}${activeCode}`, {
+      const connection = peer.connect(`${PEER_PREFIX}${activeCode.toLowerCase()}`, {
         reliable: true,
         metadata: { peerName: deviceName }
       });
@@ -760,10 +760,10 @@ function App() {
       await emitWhenConnected("join-room", { roomCode: activeCode, peerName: deviceName });
     });
 
-    peer.on("error", () => {
+    peer.on("error", (error) => {
       setState("error");
       setSocketReady(false);
-      setStatusText("Could not join that room. Check the code and keep the sender page open.");
+      setStatusText(`Could not join that room: ${error?.type ?? error?.message ?? "unknown error"}. Keep the sender page open.`);
     });
   }
 
