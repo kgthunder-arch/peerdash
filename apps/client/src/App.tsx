@@ -59,7 +59,32 @@ type AppSection = "connect" | "send" | "receive" | "tools" | "history";
 
 const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "");
 const PEER_PREFIX = "peerdash-room-";
-const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:openrelay.metered.ca:80" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  }
+];
+const PEER_OPTIONS = {
+  host: "0.peerjs.com",
+  port: 443,
+  path: "/",
+  secure: true,
+  config: { iceServers: ICE_SERVERS }
+};
 const CHUNK_SIZE = 256 * 1024;
 const BUFFER_HIGH_WATER = 4 * 1024 * 1024;
 const BUFFER_LOW_WATER = 1 * 1024 * 1024;
@@ -333,7 +358,12 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const prefilled = params.get("room");
     if (prefilled) {
-      setJoinCode(prefilled.toUpperCase());
+      const activeCode = prefilled.toUpperCase();
+      setJoinCode(activeCode);
+      setActiveSection("connect");
+      window.setTimeout(() => {
+        void joinRoom(activeCode);
+      }, 250);
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -599,6 +629,7 @@ function App() {
     const nextCode = makeRoomCode();
     destroyPeerConnection();
     setRole("sender");
+    setActiveSection("connect");
     setRoomCode(nextCode);
     setJoinCode(nextCode);
     setState("signaling");
@@ -607,9 +638,7 @@ function App() {
     setSocketReady(false);
     setStatusText("Creating secure room...");
 
-    const peer = new Peer(`${PEER_PREFIX}${nextCode}`, {
-      config: { iceServers: ICE_SERVERS }
-    });
+    const peer = new Peer(`${PEER_PREFIX}${nextCode}`, PEER_OPTIONS);
     peerJsRef.current = peer;
 
     peer.on("open", async () => {
@@ -630,19 +659,18 @@ function App() {
     });
   }
 
-  async function joinRoom() {
-    const activeCode = joinCode.trim().toUpperCase();
+  async function joinRoom(codeOverride?: string) {
+    const activeCode = (codeOverride ?? joinCode).trim().toUpperCase();
     if (!activeCode) return;
     destroyPeerConnection();
     setRole("receiver");
+    setActiveSection("connect");
     setRoomCode(activeCode);
     setState("signaling");
     setSocketReady(false);
     setStatusText("Joining room...");
 
-    const peer = new Peer(undefined, {
-      config: { iceServers: ICE_SERVERS }
-    });
+    const peer = new Peer(undefined, PEER_OPTIONS);
     peerJsRef.current = peer;
 
     peer.on("open", async () => {
