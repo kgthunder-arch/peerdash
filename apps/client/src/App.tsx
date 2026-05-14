@@ -81,7 +81,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 const PEER_OPTIONS = {
   host: "0.peerjs.com",
   port: 443,
-  path: "/peerjs",
+  path: "/",
   secure: true,
   config: { iceServers: ICE_SERVERS }
 };
