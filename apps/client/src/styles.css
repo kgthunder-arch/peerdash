@@ -267,6 +267,40 @@ input:focus, textarea:focus {
   margin-top: 0.5rem;
 }
 
+.scanner-wrap {
+  display: none;
+  width: 100%;
+  max-width: 360px;
+  margin: 0.75rem 0;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.scanner-wrap.active {
+  display: block;
+}
+
+.scanner-view,
+.scanner-view video {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.scanner-view {
+  min-height: 260px;
+}
+
+.scanner-view video {
+  display: block;
+  object-fit: cover;
+}
+
+.scanner-error {
+  margin-top: 0.25rem;
+}
+
 .panel-head,
 .row,
 .row-actions {
@@ -481,6 +515,11 @@ progress {
 :root[data-theme='light'] textarea {
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme='light'] .scanner-wrap {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 :root[data-theme='light'] .metrics div {

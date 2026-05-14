@@ -85,6 +85,7 @@ const PEER_OPTIONS = {
   secure: true,
   config: { iceServers: ICE_SERVERS }
 };
+const QR_READER_ID = "peerdash-qr-reader";
 const CHUNK_SIZE = 256 * 1024;
 const BUFFER_HIGH_WATER = 4 * 1024 * 1024;
 const BUFFER_LOW_WATER = 1 * 1024 * 1024;
@@ -148,6 +149,20 @@ function getSelectedFiles(event: ChangeEvent<HTMLInputElement>) {
   }));
 }
 
+function readRoomCodeFromQr(value: string) {
+  const trimmed = value.trim();
+  try {
+    const parsed = new URL(trimmed);
+    const room = parsed.searchParams.get("room");
+    if (room) return room.toUpperCase();
+  } catch {
+    // Raw six-character room codes are also valid QR payloads.
+  }
+
+  const match = trimmed.match(/[A-Z0-9]{6}/i);
+  return match ? match[0].toUpperCase() : "";
+}
+
 function App() {
   const [role, setRole] = useState<Role>(null);
   const [roomCode, setRoomCode] = useState("");
@@ -172,12 +187,15 @@ function App() {
   const [socketReady, setSocketReady] = useState(false);
   const [installState, setInstallState] = useState<"unavailable" | "ready" | "installed" | "pending">("unavailable");
   const [activeSection, setActiveSection] = useState<AppSection>("connect");
+  const [scannerActive, setScannerActive] = useState(false);
+  const [scannerError, setScannerError] = useState("");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
   const socketRef = useRef<Socket | null>(null);
+  const qrScannerRef = useRef<any | null>(null);
   const peerJsRef = useRef<Peer | null>(null);
   const peerDataRef = useRef<DataConnection | null>(null);
   const roleRef = useRef<Role>(null);
@@ -371,6 +389,7 @@ function App() {
 
     return () => {
       socket.disconnect();
+      stopQrScanner();
       channelRef.current?.close();
       peerRef.current?.close();
       destroyPeerConnection();
@@ -610,6 +629,7 @@ function App() {
   }
 
   async function emitWhenConnected(event: string, payload: Record<string, unknown>) {
+    if (!SIGNAL_URL) return;
     const socket = socketRef.current;
     if (!socket) return;
     if (socket.connected) {
@@ -623,6 +643,64 @@ function App() {
       });
     });
     socket.emit(event, payload);
+  }
+
+  async function stopQrScanner() {
+    const scanner = qrScannerRef.current;
+    if (!scanner) {
+      setScannerActive(false);
+      return;
+    }
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      await scanner.clear();
+    } catch {
+      // Camera cleanup can throw if the browser already stopped the stream.
+    } finally {
+      qrScannerRef.current = null;
+      setScannerActive(false);
+    }
+  }
+
+  async function startQrScanner() {
+    setActiveSection("connect");
+    setScannerError("");
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScannerError("Camera scanning is not available in this browser.");
+      return;
+    }
+
+    await stopQrScanner();
+    const { Html5Qrcode } = await import("html5-qrcode");
+    const scanner = new Html5Qrcode(QR_READER_ID);
+    qrScannerRef.current = scanner;
+    setScannerActive(true);
+
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        async (decodedText) => {
+          const scannedCode = readRoomCodeFromQr(decodedText);
+          if (!scannedCode) {
+            setScannerError("That QR does not contain a PeerDash room code.");
+            return;
+          }
+
+          setJoinCode(scannedCode);
+          await stopQrScanner();
+          await joinRoom(scannedCode);
+        },
+        () => undefined
+      );
+    } catch {
+      setScannerError("Camera permission failed. Allow camera access and try again.");
+      await stopQrScanner();
+    }
   }
 
   async function createRoom() {
@@ -1082,11 +1160,18 @@ function App() {
           <div className="actions">
             <button className="primary" onClick={createRoom}>Create sender room</button>
             <button onClick={joinRoom}>Join as receiver</button>
+            <button onClick={scannerActive ? stopQrScanner : startQrScanner}>
+              {scannerActive ? "Stop camera" : "Scan QR"}
+            </button>
           </div>
           <label className="field">
             <span>Join code</span>
             <input value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} placeholder="ABC123" />
           </label>
+          <div className={scannerActive ? "scanner-wrap active" : "scanner-wrap"}>
+            <div id={QR_READER_ID} className="scanner-view" />
+          </div>
+          {scannerError ? <p className="muted scanner-error">{scannerError}</p> : null}
           {qrData ? <img className="qr" src={qrData} alt="Room QR" /> : null}
           <p className="muted">Peer: {peerName}</p>
         </div>
