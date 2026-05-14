@@ -55,6 +55,8 @@ type DeferredInstallPrompt = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+type AppSection = "connect" | "send" | "receive" | "tools" | "history";
+
 const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "");
 const PEER_PREFIX = "peerdash-room-";
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -144,6 +146,7 @@ function App() {
   const [theme, setTheme] = useState("dark");
   const [socketReady, setSocketReady] = useState(false);
   const [installState, setInstallState] = useState<"unavailable" | "ready" | "installed" | "pending">("unavailable");
+  const [activeSection, setActiveSection] = useState<AppSection>("connect");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -968,6 +971,14 @@ function App() {
     activeSendRef.current = false;
   }
 
+  const sections: Array<{ id: AppSection; label: string; meta: string }> = [
+    { id: "connect", label: "Connect", meta: roomCode || "No room" },
+    { id: "send", label: "Send", meta: `${files.length} files` },
+    { id: "receive", label: "Receive", meta: `${incoming.length} items` },
+    { id: "tools", label: "Tools", meta: receivedTexts.length ? `${receivedTexts.length} notes` : "Notes" },
+    { id: "history", label: "History", meta: `${history.length} recent` }
+  ];
+
   return (
     <div className="shell">
       <section className="hero">
@@ -1018,8 +1029,23 @@ function App() {
         </div>
       </section>
 
-      <section className="grid two">
-        <div className="panel">
+      <nav className="section-tabs" aria-label="PeerDash sections">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            className={activeSection === section.id ? "section-tab active" : "section-tab"}
+            onClick={() => setActiveSection(section.id)}
+          >
+            <span>{section.label}</span>
+            <small>{section.meta}</small>
+          </button>
+        ))}
+      </nav>
+
+      <main className="section-stage">
+        {activeSection === "connect" ? (
+        <section className="app-section">
+          <div className="panel">
           <h3>Connect devices</h3>
           <label className="field">
             <span>Device name</span>
@@ -1036,8 +1062,12 @@ function App() {
           {qrData ? <img className="qr" src={qrData} alt="Room QR" /> : null}
           <p className="muted">Peer: {peerName}</p>
         </div>
+        </section>
+        ) : null}
 
-        <div className="panel">
+        {activeSection === "tools" ? (
+        <section className="app-section">
+          <div className="panel">
           <h3>Quick share tools</h3>
           <label className="field">
             <span>Transfer note</span>
@@ -1058,10 +1088,12 @@ function App() {
             ))}
           </div>
         </div>
-      </section>
+        </section>
+        ) : null}
 
-      <section className="grid two">
-        <div className={`panel ${dragActive ? "drag-active" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        {activeSection === "send" ? (
+        <section className="app-section">
+          <div className={`panel ${dragActive ? "drag-active" : ""}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="panel-head">
             <div>
               <h3>Send queue</h3>
@@ -1105,8 +1137,12 @@ function App() {
             )})}
           </div>
         </div>
+        </section>
+        ) : null}
 
-        <div className="panel">
+        {activeSection === "receive" ? (
+        <section className="app-section">
+          <div className="panel">
           <div className="panel-head">
             <div>
               <h3>Receiver inbox</h3>
@@ -1147,10 +1183,13 @@ function App() {
             )})}
           </div>
         </div>
-      </section>
+        </section>
+        ) : null}
 
-      <section className="panel">
-        <div className="panel-head">
+        {activeSection === "history" ? (
+        <section className="app-section">
+          <div className="panel">
+          <div className="panel-head">
           <div>
             <h3>Recent transfer history</h3>
             <p>Local to this device for repeat sends and transfer checks.</p>
@@ -1174,7 +1213,10 @@ function App() {
             </article>
           ))}
         </div>
-      </section>
+        </div>
+        </section>
+        ) : null}
+      </main>
     </div>
   );
 }

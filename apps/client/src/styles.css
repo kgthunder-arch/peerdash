@@ -19,6 +19,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(64, 149, 255, 0.24), transparent 40%),
     radial-gradient(circle at bottom right, rgba(55, 212, 170, 0.18), transparent 40%),
@@ -95,7 +96,12 @@ button:disabled {
 .shell {
   width: min(1180px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 2rem 0 3rem;
+  height: 100dvh;
+  padding: 1rem 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0.85rem;
+  overflow: hidden;
 }
 
 .hero {
@@ -103,14 +109,13 @@ button:disabled {
   grid-template-columns: 1.5fr 1fr;
   gap: 1rem;
   align-items: stretch;
-  margin-bottom: 1rem;
 }
 
 .hero h1 {
-  font-size: clamp(2.4rem, 6vw, 4.8rem);
-  line-height: 0.95;
-  margin: 0.35rem 0 1rem;
-  max-width: 10ch;
+  font-size: 2rem;
+  line-height: 1;
+  margin: 0.35rem 0 0.75rem;
+  max-width: 16ch;
 }
 
 .hero p,
@@ -153,12 +158,12 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .metrics div {
-  padding: 0.9rem;
-  border-radius: 20px;
+  padding: 0.75rem;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -171,7 +176,58 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
-  margin-bottom: 1rem;
+}
+
+.section-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.section-tab {
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  display: grid;
+  gap: 0.1rem;
+  justify-items: start;
+  background: rgba(244, 247, 251, 0.06);
+}
+
+.section-tab span {
+  font-weight: 700;
+}
+
+.section-tab small {
+  color: rgba(244, 247, 251, 0.62);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.section-tab.active {
+  background: linear-gradient(135deg, rgba(55, 212, 170, 0.9), rgba(64, 149, 255, 0.9));
+  color: #07111b;
+}
+
+.section-tab.active small {
+  color: rgba(7, 17, 27, 0.72);
+}
+
+.section-stage {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-section {
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-section > .panel {
+  height: 100%;
+  overflow: auto;
 }
 
 .field {
@@ -259,6 +315,15 @@ progress {
     grid-template-columns: 1fr;
   }
 
+  .hero {
+    gap: 0.75rem;
+  }
+
+  .hero h1 {
+    font-size: 1.65rem;
+    max-width: none;
+  }
+
   .panel-head,
   .row,
   .row-actions {
@@ -269,30 +334,59 @@ progress {
   .metrics {
     grid-template-columns: 1fr;
   }
+
+  .section-tabs {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
+  .section-tab {
+    min-width: 112px;
+  }
 }
 
 @media (max-width: 480px) {
   .shell {
-    padding: 1rem 0 2rem;
+    width: min(100% - 1rem, 1180px);
+    padding: 0.5rem 0;
+    gap: 0.6rem;
   }
+
   .hero h1 {
-    font-size: 2rem;
+    font-size: 1.35rem;
   }
+
+  .hero p {
+    display: none;
+  }
+
   .hero-card, .panel {
     padding: 1rem;
-    border-radius: 20px;
+    border-radius: 16px;
   }
+
   button, .button-like, .download {
     padding: 0.7rem 1rem;
     font-size: 0.95rem;
   }
+
   .actions {
     flex-direction: column;
     width: 100%;
   }
+
   .actions button, .actions .button-like {
     width: 100%;
     text-align: center;
+  }
+
+  .metrics {
+    gap: 0.45rem;
+  }
+
+  .metrics div {
+    padding: 0.55rem;
   }
 }
 
@@ -370,7 +464,18 @@ progress {
   background: rgba(0, 0, 0, 0.04);
 }
 
+:root[data-theme='light'] .section-tab {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme='light'] .section-tab small {
+  color: rgba(8, 17, 29, 0.62);
+}
+
+:root[data-theme='light'] .section-tab.active {
+  background: linear-gradient(135deg, rgba(55, 212, 170, 0.95), rgba(64, 149, 255, 0.95));
+}
+
 :root[data-theme='light'] .row {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
-
