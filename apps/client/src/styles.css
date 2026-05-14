@@ -20,6 +20,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(64, 149, 255, 0.24), transparent 40%),
     radial-gradient(circle at bottom right, rgba(55, 212, 170, 0.18), transparent 40%),
@@ -336,21 +337,32 @@ progress {
   }
 
   .section-tabs {
-    display: flex;
-    overflow-x: auto;
-    padding-bottom: 0.15rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .section-tab {
-    min-width: 112px;
+    min-width: 0;
+    width: 100%;
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 }
 
 @media (max-width: 480px) {
+  body {
+    overflow-y: auto;
+  }
+
   .shell {
     width: min(100% - 1rem, 1180px);
+    min-height: 100dvh;
+    height: auto;
     padding: 0.5rem 0;
     gap: 0.6rem;
+    overflow: visible;
   }
 
   .hero h1 {
@@ -387,6 +399,17 @@ progress {
 
   .metrics div {
     padding: 0.55rem;
+  }
+
+  .section-stage,
+  .app-section {
+    overflow: visible;
+  }
+
+  .app-section > .panel {
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 }
 
