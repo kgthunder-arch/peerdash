@@ -49,6 +49,11 @@ type ControlMessage =
   | { type: "resume"; fileId: string }
   | { type: "cancel"; fileId: string };
 
+type DeferredInstallPrompt = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 const SIGNAL_URL = import.meta.env.VITE_SIGNAL_SERVER_URL ?? "http://localhost:3001";
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 const CHUNK_SIZE = 256 * 1024;
@@ -135,14 +140,20 @@ function App() {
   const [selectedIncoming, setSelectedIncoming] = useState<Set<string>>(new Set());
   const [isMuted, setIsMuted] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [socketReady, setSocketReady] = useState(false);
+  const [installState, setInstallState] = useState<"unavailable" | "ready" | "installed" | "pending">("unavailable");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
   const socketRef = useRef<Socket | null>(null);
+  const roleRef = useRef<Role>(null);
+  const roomCodeRef = useRef("");
+  const joinCodeRef = useRef("");
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
+  const installPromptRef = useRef<DeferredInstallPrompt | null>(null);
   const fallbackModeRef = useRef(false);
   const targetSocketIdRef = useRef<string | null>(null);
   const sendPausedRef = useRef<Record<string, boolean>>({});
@@ -195,10 +206,42 @@ function App() {
   const receivedBytes = useMemo(() => incoming.reduce((sum, item) => sum + item.transferredBytes, 0), [incoming]);
 
   useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
+
+  useEffect(() => {
+    joinCodeRef.current = joinCode;
+  }, [joinCode]);
+
+  useEffect(() => {
     const socket = io(SIGNAL_URL, {
+      autoConnect: true,
       transports: ["websocket", "polling"]
     });
     socketRef.current = socket;
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      installPromptRef.current = event as DeferredInstallPrompt;
+      setInstallState("ready");
+    };
+
+    const handleInstalled = () => {
+      installPromptRef.current = null;
+      setInstallState("installed");
+    };
+
+    socket.on("connect", () => {
+      setSocketReady(true);
+    });
+
+    socket.on("disconnect", () => {
+      setSocketReady(false);
+    });
 
     socket.on("room-created", async ({ roomCode: nextCode }: { roomCode: string }) => {
       setRoomCode(nextCode);
@@ -208,7 +251,7 @@ function App() {
     });
 
     socket.on("peer-joined", async ({ roomCode: activeCode, peerName: nextPeer, socketId }: { roomCode: string; peerName: string; socketId: string }) => {
-      if (role === "sender") {
+      if (roleRef.current === "sender") {
         setPeerName(nextPeer);
         setState("connecting");
         setStatusText("Peer detected. Building the direct lane.");
@@ -219,7 +262,7 @@ function App() {
     });
 
     socket.on("ready", async ({ roomCode: activeCode, peerName: nextPeer }: { roomCode: string; peerName: string }) => {
-      if (role === "receiver") {
+      if (roleRef.current === "receiver") {
         setRoomCode(activeCode);
         setPeerName(nextPeer);
         setState("connecting");
@@ -238,7 +281,7 @@ function App() {
           targetSocketIdRef.current = sender;
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
-          socket.emit("signal", { roomCode: roomCode || joinCode.toUpperCase(), target: sender, payload: answer });
+          socket.emit("signal", { roomCode: roomCodeRef.current || joinCodeRef.current.toUpperCase(), target: sender, payload: answer });
         }
       } else if (payload.candidate) {
         await peer.addIceCandidate(payload).catch(() => undefined);
@@ -271,12 +314,17 @@ function App() {
       setJoinCode(prefilled.toUpperCase());
     }
 
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+
     return () => {
       socket.disconnect();
       channelRef.current?.close();
       peerRef.current?.close();
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
     };
-  }, [joinCode, role, roomCode]);
+  }, []);
 
   function updateSpeed(bytes: number) {
     const now = Date.now();
@@ -455,19 +503,66 @@ function App() {
     }
   }
 
-  function createRoom() {
-    setRole("sender");
-    socketRef.current?.emit("create-room", { roomCode: makeRoomCode(), peerName: deviceName });
+  async function emitWhenConnected(event: string, payload: Record<string, unknown>) {
+    const socket = socketRef.current;
+    if (!socket) return;
+    if (socket.connected) {
+      socket.emit(event, payload);
+      return;
+    }
+    socket.connect();
+    await new Promise<void>((resolve) => {
+      socket.once("connect", () => {
+        resolve();
+      });
+    });
+    socket.emit(event, payload);
   }
 
-  function joinRoom() {
+  async function createRoom() {
+    const nextCode = makeRoomCode();
+    setRole("sender");
+    setRoomCode(nextCode);
+    setJoinCode(nextCode);
+    setState("signaling");
+    setPeerName("Waiting for peer");
+    setQrData(await makeQrData(`${window.location.origin}?room=${nextCode}`));
+    setStatusText(socketReady
+      ? "Room ready. Share the code or QR and wait for the receiver."
+      : "Room code is ready. Reconnecting to the signal server so another device can join.");
+    await emitWhenConnected("create-room", { roomCode: nextCode, peerName: deviceName });
+  }
+
+  async function joinRoom() {
     const activeCode = joinCode.trim().toUpperCase();
     if (!activeCode) return;
     setRole("receiver");
     setRoomCode(activeCode);
     setState("signaling");
     setStatusText("Joining room and waiting for the sender handshake.");
-    socketRef.current?.emit("join-room", { roomCode: activeCode, peerName: deviceName });
+    await emitWhenConnected("join-room", { roomCode: activeCode, peerName: deviceName });
+  }
+
+  async function installApp() {
+    if (installPromptRef.current) {
+      setInstallState("pending");
+      await installPromptRef.current.prompt();
+      const result = await installPromptRef.current.userChoice;
+      setInstallState(result.outcome === "accepted" ? "installed" : "ready");
+      if (result.outcome === "accepted") {
+        setStatusText("PeerDash installed. You can launch it like a native app now.");
+      }
+      return;
+    }
+
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setInstallState("installed");
+      setStatusText("PeerDash is already installed on this device.");
+      return;
+    }
+
+    setInstallState("unavailable");
+    setStatusText("Install is only available after the browser recognizes PeerDash as installable.");
   }
 
   function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -770,12 +865,22 @@ function App() {
             <button onClick={() => setIsMuted(m => !m)}>
               {isMuted ? '🔇 Unmute' : '🔊 Mute'}
             </button>
+            <button onClick={installApp}>
+              {installState === "installed"
+                ? "App installed"
+                : installState === "pending"
+                  ? "Install pending"
+                  : installState === "ready"
+                    ? "Install app"
+                    : "Install unavailable"}
+            </button>
           </div>
         </div>
         <div className="hero-card">
           <div className="status-pill">{state.toUpperCase()}</div>
           <h2>{roomCode ? `Room ${roomCode}` : "No active room yet"}</h2>
           <p>{statusText}</p>
+          <p className="muted">Signal server: {socketReady ? "online" : "reconnecting"}</p>
           <div className="metrics">
             <div>
               <strong>{formatBytes(transferSpeed)}/s</strong>

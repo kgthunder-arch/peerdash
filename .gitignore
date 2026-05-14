@@ -6,3 +6,5 @@ coverage
 *.log
 apps/client/dist
 apps/server/dist
+
+.vercel
