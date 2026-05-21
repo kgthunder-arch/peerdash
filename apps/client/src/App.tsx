@@ -234,6 +234,8 @@ function App() {
   const speedWindowRef = useRef<{ time: number; bytes: number }[]>([]);
   const lastSpeedUpdateRef = useRef(0);
   const lastIncomingUpdateRef = useRef(0);
+  const sendingFilesRef = useRef<Set<string>>(new Set());
+  const manifestSentRef = useRef(false);
 
   function sendControl(msg: ControlMessage) {
     if (peerDataRef.current?.open) {
@@ -1170,60 +1172,35 @@ function App() {
     });
   }
 
-  async function sendQueuedFiles() {
-    const peerReady = Boolean(peerDataRef.current?.open);
-    if (!peerReady && !fallbackModeRef.current && (!channelRef.current || channelRef.current.readyState !== "open" || activeSendRef.current)) return;
-    if (activeSendRef.current) return;
-    const activeFiles = files.filter((file) => file.status !== "canceled" && file.status !== "done");
-    if (activeFiles.length === 0) return;
+  async function sendFile(fileId: string) {
+    const file = files.find((f) => f.id === fileId);
+    if (!file || file.status === "done" || file.status === "canceled") return;
+    if (sendingFilesRef.current.has(fileId)) return;
 
-    activeSendRef.current = true;
-    transferCanceledRef.current = false;
-    totalBytesRef.current = activeFiles.reduce((sum, file) => sum + (file.file.size - file.transferredBytes), 0);
-    movedBytesRef.current = 0;
-    speedWindowRef.current = [];
-    lastSpeedUpdateRef.current = 0;
+    sendingFilesRef.current.add(fileId);
+    setFiles((current) => current.map((f) => (f.id === fileId ? { ...f, status: "sending" } : f)));
+    setStatusText(`Transferring... keep both devices awake.`);
 
-    sendControl({
-      type: "manifest",
-      files: files.filter((file) => file.status !== "canceled").map<FileMeta>((file) => ({
-        id: file.id,
-        name: file.file.name,
-        size: file.file.size,
-        type: file.file.type,
-        relativePath: file.relativePath
-      })),
-      note,
-      senderName: deviceName
-    });
+    try {
+      sendControl({ type: "file-start", fileId: file.id });
 
-    if (note.trim()) {
-      sendControl({ type: "transfer-note", text: note.trim(), senderName: deviceName });
-    }
-
-    setState("transferring");
-
-    for (const item of activeFiles) {
-      if (transferCanceledRef.current) break;
-      sendControl({ type: "file-start", fileId: item.id });
-      setFiles((current) => current.map((file) => (file.id === item.id ? { ...file, status: "sending" } : file)));
-
-      let offset = item.transferredBytes;
+      let offset = file.transferredBytes;
       let lastProgressUpdate = 0;
       const chunkSize = getTransferChunkSize(Boolean(peerDataRef.current?.open), fallbackModeRef.current);
-      setStatusText(`High-speed transfer active (${formatBytes(chunkSize)} chunks). Keep both devices awake.`);
-      while (offset < item.file.size && !transferCanceledRef.current) {
-        if (sendPausedRef.current[item.id]) {
-          await waitWhilePaused(item.id);
+
+      while (offset < file.file.size && !transferCanceledRef.current) {
+        if (sendPausedRef.current[fileId]) {
+          await waitWhilePaused(fileId);
         }
 
-        if (transferCanceledRef.current || sendPausedRef.current[item.id]) break;
+        if (transferCanceledRef.current || sendPausedRef.current[fileId]) break;
+        if (!sendingFilesRef.current.has(fileId)) break;
 
         await waitForBuffer(getTransferDataChannel());
 
-        const slice = item.file.slice(offset, offset + chunkSize);
+        const slice = file.file.slice(offset, offset + chunkSize);
         const bytes = new Uint8Array(await slice.arrayBuffer());
-        const idBytes = encoder.encode(item.id);
+        const idBytes = encoder.encode(file.id);
         const packet = new Uint8Array(1 + idBytes.length + bytes.length);
         packet[0] = idBytes.length;
         packet.set(idBytes, 1);
@@ -1233,51 +1210,108 @@ function App() {
         offset += bytes.byteLength;
         updateSpeed(bytes.byteLength);
         const now = performance.now();
-        if (offset >= item.file.size || now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
+        if (offset >= file.file.size || now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
           lastProgressUpdate = now;
           setFiles((current) =>
-            current.map((file) =>
-              file.id === item.id
+            current.map((f) =>
+              f.id === fileId
                 ? {
-                    ...file,
+                    ...f,
                     transferredBytes: offset,
-                    progress: Math.min((offset / file.file.size) * 100, 100),
-                    status: offset >= file.file.size ? "done" : "sending"
+                    progress: Math.min((offset / f.file.size) * 100, 100),
+                    status: offset >= f.file.size ? "done" : "sending"
                   }
-                : file
+                : f
             )
           );
         }
       }
 
-      if (transferCanceledRef.current || sendPausedRef.current[item.id]) break;
-      sendControl({ type: "file-complete", fileId: item.id });
+      if (!transferCanceledRef.current && !sendPausedRef.current[fileId]) {
+        sendControl({ type: "file-complete", fileId: file.id });
+        setFiles((current) => current.map((f) => (f.id === fileId ? { ...f, status: "done", progress: 100 } : f)));
+      }
+    } finally {
+      sendingFilesRef.current.delete(fileId);
     }
-
-    if (transferCanceledRef.current) {
-      activeSendRef.current = false;
-      setState(peerDataRef.current?.open || channelRef.current?.readyState === "open" ? "connected" : "idle");
-      setStatusText("Transfer canceled. The room is still open if you want to send another batch.");
-      return;
-    }
-
-    sendControl({ type: "transfer-complete" });
-    setState("done");
-    setStatusText("Batch sent. The receiver can save each finished item instantly.");
-    playBeep(523, 100, isMuted);
-    setTimeout(() => playBeep(659, 150, isMuted), 150);
-    appendHistory({
-      id: makeId(),
-      roomCode,
-      direction: "sent",
-      names: files.filter((file) => file.status !== "canceled").map((file) => file.file.name),
-      totalBytes: files.filter((file) => file.status !== "canceled").reduce((sum, file) => sum + file.file.size, 0),
-      createdAt: new Date().toISOString(),
-      peerLabel: peerName
-    });
-    setHistory(readHistory());
-    activeSendRef.current = false;
   }
+
+  async function sendQueuedFiles() {
+    const peerReady = Boolean(peerDataRef.current?.open);
+    if (!peerReady && !fallbackModeRef.current && (!channelRef.current || channelRef.current.readyState !== "open")) return;
+
+    const activeFiles = files.filter((file) => file.status !== "canceled" && file.status !== "done");
+    if (activeFiles.length === 0) return;
+
+    if (!activeSendRef.current) {
+      activeSendRef.current = true;
+      transferCanceledRef.current = false;
+      totalBytesRef.current = activeFiles.reduce((sum, file) => sum + (file.file.size - file.transferredBytes), 0);
+      movedBytesRef.current = 0;
+      speedWindowRef.current = [];
+      lastSpeedUpdateRef.current = 0;
+      setState("transferring");
+    }
+
+    // Send or update manifest
+    const manifestFiles = files.filter((file) => file.status !== "canceled").map<FileMeta>((file) => ({
+      id: file.id,
+      name: file.file.name,
+      size: file.file.size,
+      type: file.file.type,
+      relativePath: file.relativePath
+    }));
+
+    // Always send updated manifest for real-time additions
+    sendControl({
+      type: "manifest",
+      files: manifestFiles,
+      note,
+      senderName: deviceName
+    });
+
+    if (note.trim() && !manifestSentRef.current) {
+      sendControl({ type: "transfer-note", text: note.trim(), senderName: deviceName });
+      manifestSentRef.current = true;
+    }
+
+    // Start concurrent sends for all queued files
+    activeFiles.forEach((file) => {
+      sendFile(file.id).catch(() => undefined);
+    });
+
+    // Check if all files are done
+    const allDone = files.every((file) => file.status === "done" || file.status === "canceled");
+    if (allDone && activeFiles.length > 0) {
+      sendControl({ type: "transfer-complete" });
+      setState("done");
+      setStatusText("Transfer complete! Files are ready to save on the other device.");
+      playBeep(523, 100, isMuted);
+      setTimeout(() => playBeep(659, 150, isMuted), 150);
+      appendHistory({
+        id: makeId(),
+        roomCode,
+        direction: "sent",
+        names: files.filter((file) => file.status !== "canceled").map((file) => file.file.name),
+        totalBytes: files.filter((file) => file.status !== "canceled").reduce((sum, file) => sum + file.file.size, 0),
+        createdAt: new Date().toISOString(),
+        peerLabel: peerName
+      });
+      setHistory(readHistory());
+      activeSendRef.current = false;
+      manifestSentRef.current = false;
+    }
+  }
+
+  // Auto-trigger transfer when files are added and peer is connected
+  useEffect(() => {
+    if ((state === "connected" || state === "transferring") && role === "sender" && files.length > 0) {
+      const hasPendingFiles = files.some((f) => f.status !== "done" && f.status !== "canceled");
+      if (hasPendingFiles) {
+        void sendQueuedFiles();
+      }
+    }
+  }, [files, state, role]);
 
   const sections: Array<{ id: AppSection; label: string; meta: string }> = [
     { id: "connect", label: "Connect", meta: roomCode || "No room" },

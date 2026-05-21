@@ -37,6 +37,17 @@
   to { background-position: 200% 50%; }
 }
 
+@keyframes scanLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes qrPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(55, 212, 170, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(55, 212, 170, 0.3), inset 0 0 0 1px rgba(55, 212, 170, 0.4); }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -329,15 +340,18 @@ input:focus, textarea:focus {
   margin-top: 0.5rem;
 }
 
+/* QR Scanner - Google Pay Style */
 .scanner-wrap {
   display: none;
   width: 100%;
   max-width: 360px;
   margin: 0.75rem 0;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(55, 212, 170, 0.2);
+  animation: qrPulse 3s ease-in-out infinite;
+  position: relative;
 }
 
 .scanner-wrap.active {
@@ -351,16 +365,81 @@ input:focus, textarea:focus {
 }
 
 .scanner-view {
-  min-height: 260px;
+  min-height: 320px;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .scanner-view video {
   display: block;
   object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* QR Corner Brackets */
+.scanner-view::before,
+.scanner-view::after {
+  content: "";
+  position: absolute;
+  border: 3px solid #37d4aa;
+  width: 35px;
+  height: 35px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.scanner-view::before {
+  top: 20px;
+  left: 20px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.scanner-view::after {
+  top: 20px;
+  right: 20px;
+  border-left: none;
+  border-bottom: none;
+  border-right: 3px solid #37d4aa;
+  border-top: 3px solid #37d4aa;
+}
+
+/* Horizontal lines for scanning effect */
+.scanner-wrap::before {
+  content: "";
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #37d4aa, transparent);
+  animation: scanLine 2s ease-in-out infinite;
+  z-index: 5;
+}
+
+/* Bottom brackets */
+.scanner-view > svg {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 35px;
+  height: 35px;
+  stroke: #37d4aa;
+  stroke-width: 3;
+  fill: none;
+  pointer-events: none;
 }
 
 .scanner-error {
   margin-top: 0.25rem;
+  padding: 0.6rem;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 12px;
+  border-left: 3px solid #ff6b6b;
 }
 
 .panel-head,
