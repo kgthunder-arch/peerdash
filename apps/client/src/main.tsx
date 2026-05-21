@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "webrtc-adapter";
 import App from "./App";
 import "./styles.css";
 

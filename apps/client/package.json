@@ -12,18 +12,17 @@
     "@capacitor/android": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/filesystem": "^8.1.2",
-    "file-saver": "^2.0.5",
     "html5-qrcode": "^2.3.8",
     "jszip": "^3.10.1",
     "peerjs": "^1.5.5",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "webrtc-adapter": "^9.0.5"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.1",
-    "@types/file-saver": "^2.0.7",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

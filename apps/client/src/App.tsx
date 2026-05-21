@@ -6,7 +6,6 @@ import Peer, { DataConnection } from "peerjs";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import JSZip from "jszip";
-import { saveAs } from "file-saver";
 import { appendHistory, readHistory, clearHistory, type HistoryItem } from "./lib/storage";
 
 type Role = "sender" | "receiver" | null;
@@ -161,6 +160,14 @@ function readRoomCodeFromQr(value: string) {
 
   const match = trimmed.match(/[A-Z0-9]{6}/i);
   return match ? match[0].toUpperCase() : "";
+}
+
+function isPeerTransferSupported() {
+  return Boolean(window.RTCPeerConnection && window.RTCDataChannel && window.WebSocket);
+}
+
+function isIosSafariLike() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 function App() {
@@ -669,8 +676,13 @@ function App() {
     setActiveSection("connect");
     setScannerError("");
 
+    if (!window.isSecureContext) {
+      setScannerError("Camera scanning needs HTTPS. Open the live https:// site and allow camera access.");
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      setScannerError("Camera scanning is not available in this browser.");
+      setScannerError("Camera scanning is not available in this browser. Type the room code instead.");
       return;
     }
 
@@ -704,6 +716,12 @@ function App() {
   }
 
   async function createRoom() {
+    if (!isPeerTransferSupported()) {
+      setState("error");
+      setStatusText("This browser does not support WebRTC file transfer. Use current Safari, Firefox, Chrome, Edge, or Samsung Internet.");
+      return;
+    }
+
     const nextCode = makeRoomCode();
     destroyPeerConnection();
     setRole("sender");
@@ -739,6 +757,12 @@ function App() {
   }
 
   async function joinRoom(codeOverride?: string) {
+    if (!isPeerTransferSupported()) {
+      setState("error");
+      setStatusText("This browser does not support WebRTC file transfer. Use current Safari, Firefox, Chrome, Edge, or Samsung Internet.");
+      return;
+    }
+
     const activeCode = (codeOverride ?? joinCode).trim().toUpperCase();
     if (!activeCode) return;
     destroyPeerConnection();
@@ -829,13 +853,47 @@ function App() {
       targets.forEach((file) => saveNativeFile(file));
     } else {
       targets.forEach((file) => {
-        const a = document.createElement("a");
-        a.href = file.downloadUrl!;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        triggerBrowserDownload(file.downloadUrl!, file.name);
       });
+    }
+  }
+
+  function triggerBrowserDownload(url: string, fileName: string) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    if (isIosSafariLike()) {
+      window.setTimeout(() => {
+        window.open(url, "_blank", "noopener");
+      }, 250);
+    }
+  }
+
+  async function copyRoomCode() {
+    if (!roomCode) return;
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(roomCode);
+      } else {
+        const input = document.createElement("input");
+        input.value = roomCode;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+      }
+      setStatusText(`Room code ${roomCode} copied.`);
+    } catch {
+      setStatusText(`Copy blocked by this browser. Room code: ${roomCode}`);
     }
   }
 
@@ -877,7 +935,9 @@ function App() {
           }
         };
       } else {
-        saveAs(content, `PeerDash_${Date.now()}.zip`);
+        const zipUrl = URL.createObjectURL(content);
+        triggerBrowserDownload(zipUrl, `PeerDash_${Date.now()}.zip`);
+        window.setTimeout(() => URL.revokeObjectURL(zipUrl), 30000);
         setStatusText("Transfer finished. Everything is ready to save.");
       }
     } catch (e) {
@@ -1194,7 +1254,7 @@ function App() {
           </label>
           <div className="actions">
             <button onClick={sendText} disabled={state !== "connected" && state !== "transferring"}>Send text</button>
-            <button onClick={() => navigator.clipboard.writeText(roomCode)} disabled={!roomCode}>Copy room code</button>
+            <button onClick={copyRoomCode} disabled={!roomCode}>Copy room code</button>
           </div>
           <div className="chip-list">
             {receivedTexts.length === 0 ? <span className="muted">No quick text shared yet.</span> : null}
