@@ -85,9 +85,12 @@ const PEER_OPTIONS = {
   config: { iceServers: ICE_SERVERS }
 };
 const QR_READER_ID = "peerdash-qr-reader";
-const CHUNK_SIZE = 256 * 1024;
-const BUFFER_HIGH_WATER = 4 * 1024 * 1024;
-const BUFFER_LOW_WATER = 1 * 1024 * 1024;
+const RELAY_CHUNK_SIZE = 256 * 1024;
+const SAFARI_CHUNK_SIZE = 512 * 1024;
+const DIRECT_CHUNK_SIZE = 1024 * 1024;
+const BUFFER_HIGH_WATER = 32 * 1024 * 1024;
+const BUFFER_LOW_WATER = 8 * 1024 * 1024;
+const PROGRESS_UPDATE_INTERVAL_MS = 160;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -168,6 +171,12 @@ function isPeerTransferSupported() {
 
 function isIosSafariLike() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function getTransferChunkSize(isDirectPeer: boolean, isRelay: boolean) {
+  if (isRelay) return RELAY_CHUNK_SIZE;
+  if (isIosSafariLike()) return SAFARI_CHUNK_SIZE;
+  return isDirectPeer ? DIRECT_CHUNK_SIZE : SAFARI_CHUNK_SIZE;
 }
 
 function App() {
@@ -480,8 +489,18 @@ function App() {
 
   function setupPeerDataConnection(connection: DataConnection) {
     peerDataRef.current = connection;
+    const dataChannel = (connection as any).dataChannel ?? (connection as any)._dc;
+    if (dataChannel) {
+      dataChannel.binaryType = "arraybuffer";
+      dataChannel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+    }
 
     connection.on("open", () => {
+      const openDataChannel = (connection as any).dataChannel ?? (connection as any)._dc;
+      if (openDataChannel) {
+        openDataChannel.binaryType = "arraybuffer";
+        openDataChannel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+      }
       fallbackModeRef.current = false;
       setState("connected");
       setSocketReady(true);
@@ -1023,15 +1042,27 @@ function App() {
     setSharedText("");
   }
 
-  async function waitForBuffer(channel: RTCDataChannel) {
-    if (peerDataRef.current?.open) return;
-    if (fallbackModeRef.current) return;
+  function getTransferDataChannel() {
+    const peerConnection = peerDataRef.current as any;
+    return (peerConnection?.dataChannel ?? peerConnection?._dc ?? channelRef.current) as RTCDataChannel | null;
+  }
+
+  async function waitForBuffer(channel: RTCDataChannel | null) {
+    if (!channel) return;
     if (channel.bufferedAmount <= BUFFER_HIGH_WATER) return;
+
     await new Promise<void>((resolve) => {
       const onLow = () => {
         channel.removeEventListener("bufferedamountlow", onLow);
         resolve();
       };
+      const fallbackTimer = window.setInterval(() => {
+        if (channel.bufferedAmount <= BUFFER_LOW_WATER || channel.readyState !== "open") {
+          window.clearInterval(fallbackTimer);
+          channel.removeEventListener("bufferedamountlow", onLow);
+          resolve();
+        }
+      }, 50);
       channel.addEventListener("bufferedamountlow", onLow);
     });
   }
@@ -1084,16 +1115,17 @@ function App() {
       setFiles((current) => current.map((file) => (file.id === item.id ? { ...file, status: "sending" } : file)));
 
       let offset = item.transferredBytes;
+      let lastProgressUpdate = 0;
+      const chunkSize = getTransferChunkSize(Boolean(peerDataRef.current?.open), fallbackModeRef.current);
+      setStatusText(`High-speed transfer active (${formatBytes(chunkSize)} chunks). Keep both devices awake.`);
       while (offset < item.file.size) {
         if (sendPausedRef.current[item.id]) {
           await waitWhilePaused(item.id);
         }
 
-        if (channelRef.current) {
-          await waitForBuffer(channelRef.current);
-        }
+        await waitForBuffer(getTransferDataChannel());
 
-        const slice = item.file.slice(offset, offset + CHUNK_SIZE);
+        const slice = item.file.slice(offset, offset + chunkSize);
         const bytes = new Uint8Array(await slice.arrayBuffer());
         const idBytes = encoder.encode(item.id);
         const packet = new Uint8Array(1 + idBytes.length + bytes.length);
@@ -1104,18 +1136,22 @@ function App() {
 
         offset += bytes.byteLength;
         updateSpeed(bytes.byteLength);
-        setFiles((current) =>
-          current.map((file) =>
-            file.id === item.id
-              ? {
-                  ...file,
-                  transferredBytes: offset,
-                  progress: Math.min((offset / file.file.size) * 100, 100),
-                  status: offset >= file.file.size ? "done" : "sending"
-                }
-              : file
-          )
-        );
+        const now = performance.now();
+        if (offset >= item.file.size || now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
+          lastProgressUpdate = now;
+          setFiles((current) =>
+            current.map((file) =>
+              file.id === item.id
+                ? {
+                    ...file,
+                    transferredBytes: offset,
+                    progress: Math.min((offset / file.file.size) * 100, 100),
+                    status: offset >= file.file.size ? "done" : "sending"
+                  }
+                : file
+            )
+          );
+        }
       }
 
       sendControl({ type: "file-complete", fileId: item.id });
