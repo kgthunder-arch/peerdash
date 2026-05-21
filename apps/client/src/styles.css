@@ -11,6 +11,32 @@
   100% { background-position: 0% 0%; }
 }
 
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes softFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(55, 212, 170, 0); }
+  50% { box-shadow: 0 0 26px rgba(55, 212, 170, 0.28); }
+}
+
+@keyframes progressFlow {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -110,6 +136,7 @@ button:disabled {
   grid-template-columns: 1.5fr 1fr;
   gap: 1rem;
   align-items: stretch;
+  animation: riseIn 0.55s ease both;
 }
 
 .hero h1 {
@@ -137,6 +164,14 @@ button:disabled {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
+.hero-card {
+  animation: riseIn 0.7s 0.08s ease both, softFloat 7s 1.1s ease-in-out infinite;
+}
+
+.panel {
+  animation: riseIn 0.45s ease both;
+}
+
 .panel:hover {
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
@@ -153,6 +188,20 @@ button:disabled {
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.status-pill {
+  position: relative;
+  overflow: hidden;
+}
+
+.status-pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: translateX(-120%);
+  animation: progressFlow 2.8s linear infinite;
 }
 
 .metrics {
@@ -192,7 +241,13 @@ button:disabled {
   gap: 0.1rem;
   justify-items: start;
   background: rgba(244, 247, 251, 0.06);
+  animation: riseIn 0.35s ease both;
 }
+
+.section-tab:nth-child(2) { animation-delay: 0.04s; }
+.section-tab:nth-child(3) { animation-delay: 0.08s; }
+.section-tab:nth-child(4) { animation-delay: 0.12s; }
+.section-tab:nth-child(5) { animation-delay: 0.16s; }
 
 .section-tab span {
   font-weight: 700;
@@ -210,6 +265,7 @@ button:disabled {
 .section-tab.active {
   background: linear-gradient(135deg, rgba(55, 212, 170, 0.9), rgba(64, 149, 255, 0.9));
   color: #07111b;
+  animation: pulseGlow 2.5s ease-in-out infinite;
 }
 
 .section-tab.active small {
@@ -336,6 +392,24 @@ input:focus, textarea:focus {
 progress {
   width: 100%;
   height: 10px;
+  accent-color: #37d4aa;
+}
+
+progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #37d4aa, #4095ff, #37d4aa);
+  background-size: 200% 100%;
+  animation: progressFlow 1.8s linear infinite;
+}
+
+progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #37d4aa, #4095ff);
 }
 
 .chip-list {
@@ -540,4 +614,15 @@ progress {
 
 :root[data-theme='light'] .row {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

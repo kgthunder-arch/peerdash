@@ -228,6 +228,8 @@ function App() {
   const movedBytesRef = useRef(0);
   const totalBytesRef = useRef(0);
   const speedWindowRef = useRef<{ time: number; bytes: number }[]>([]);
+  const lastSpeedUpdateRef = useRef(0);
+  const lastIncomingUpdateRef = useRef(0);
 
   function sendControl(msg: ControlMessage) {
     if (peerDataRef.current?.open) {
@@ -256,8 +258,8 @@ function App() {
   async function handleIncomingBinary(data: ArrayBuffer) {
     const bytes = new Uint8Array(data);
     const idLength = bytes[0];
-    const fileId = decoder.decode(bytes.slice(1, idLength + 1));
-    const chunk = bytes.slice(idLength + 1);
+    const fileId = decoder.decode(bytes.subarray(1, idLength + 1));
+    const chunk = bytes.subarray(idLength + 1);
     const file = incomingRef.current.get(fileId);
     if (!file) return;
 
@@ -271,7 +273,11 @@ function App() {
     file.progress = Math.min((file.transferredBytes / file.size) * 100, 100);
     file.status = "receiving";
     updateSpeed(chunk.byteLength);
-    setIncoming((current) => current.map((entry) => (entry.id === fileId ? { ...file } : entry)));
+    const now = performance.now();
+    if (file.transferredBytes >= file.size || now - lastIncomingUpdateRef.current >= PROGRESS_UPDATE_INTERVAL_MS) {
+      lastIncomingUpdateRef.current = now;
+      setIncoming((current) => current.map((entry) => (entry.id === fileId ? { ...file } : entry)));
+    }
   }
 
   const totalOutgoing = useMemo(() => files.reduce((sum, item) => sum + item.file.size, 0), [files]);
@@ -419,6 +425,8 @@ function App() {
     movedBytesRef.current += bytes;
     speedWindowRef.current.push({ time: now, bytes });
     speedWindowRef.current = speedWindowRef.current.filter((point) => now - point.time <= 1500);
+    if (now - lastSpeedUpdateRef.current < PROGRESS_UPDATE_INTERVAL_MS) return;
+    lastSpeedUpdateRef.current = now;
     const total = speedWindowRef.current.reduce((sum, point) => sum + point.bytes, 0);
     const duration = Math.max((now - speedWindowRef.current[0].time) / 1000, 0.3);
     const speed = total / duration;
@@ -566,6 +574,9 @@ function App() {
       incomingRef.current = new Map(items.map((item) => [item.id, item]));
       totalBytesRef.current = items.reduce((sum, item) => sum + item.size, 0);
       movedBytesRef.current = 0;
+      speedWindowRef.current = [];
+      lastSpeedUpdateRef.current = 0;
+      lastIncomingUpdateRef.current = 0;
       setPeerName(message.senderName);
       setIncoming(items);
       setSelectedIncoming(new Set(items.map(item => item.id)));
@@ -1090,6 +1101,7 @@ function App() {
     totalBytesRef.current = activeFiles.reduce((sum, file) => sum + (file.file.size - file.transferredBytes), 0);
     movedBytesRef.current = 0;
     speedWindowRef.current = [];
+    lastSpeedUpdateRef.current = 0;
 
     sendControl({
       type: "manifest",
