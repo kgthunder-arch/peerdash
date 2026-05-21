@@ -115,6 +115,12 @@ button.primary {
   font-weight: 700;
 }
 
+button.danger {
+  background: linear-gradient(135deg, #ff6b6b, #ffcf5a);
+  color: #170807;
+  font-weight: 700;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -25,7 +25,7 @@ type IncomingFile = {
   size: number;
   relativePath: string;
   progress: number;
-  status: "queued" | "receiving" | "done";
+  status: "queued" | "receiving" | "done" | "canceled";
   transferredBytes: number;
   chunks: Uint8Array[];
   downloadUrl?: string;
@@ -47,7 +47,9 @@ type ControlMessage =
   | { type: "transfer-complete" }
   | { type: "pause"; fileId: string }
   | { type: "resume"; fileId: string }
-  | { type: "cancel"; fileId: string };
+  | { type: "cancel"; fileId: string }
+  | { type: "transfer-cancel"; senderName: string }
+  | { type: "peer-leave"; peerName: string };
 
 type DeferredInstallPrompt = Event & {
   prompt: () => Promise<void>;
@@ -225,6 +227,8 @@ function App() {
   const sendPausedRef = useRef<Record<string, boolean>>({});
   const incomingRef = useRef<Map<string, IncomingFile>>(new Map());
   const activeSendRef = useRef(false);
+  const transferCanceledRef = useRef(false);
+  const suppressCloseStatusRef = useRef(false);
   const movedBytesRef = useRef(0);
   const totalBytesRef = useRef(0);
   const speedWindowRef = useRef<{ time: number; bytes: number }[]>([]);
@@ -388,6 +392,7 @@ function App() {
       setPeerName("Waiting for peer");
       setStatusText("The other device left. Reuse the room or create a new one.");
       activeSendRef.current = false;
+      transferCanceledRef.current = true;
     });
 
     socket.on("error", ({ message }: { message: string }) => {
@@ -538,6 +543,10 @@ function App() {
     });
 
     connection.on("close", () => {
+      if (suppressCloseStatusRef.current) {
+        suppressCloseStatusRef.current = false;
+        return;
+      }
       setState("idle");
       setPeerName("Waiting for peer");
       setStatusText("The other device disconnected. Create or join a room again.");
@@ -643,6 +652,32 @@ function App() {
     if (message.type === "cancel") {
       sendPausedRef.current[message.fileId] = true;
       setFiles((current) => current.map((item) => (item.id === message.fileId ? { ...item, status: "canceled" } : item)));
+    }
+
+    if (message.type === "transfer-cancel") {
+      transferCanceledRef.current = true;
+      activeSendRef.current = false;
+      setState("connected");
+      setStatusText(`${message.senderName} canceled the transfer. You can pick another batch or leave the room.`);
+      setFiles((current) => current.map((item) => (item.status === "done" ? item : { ...item, status: "canceled" })));
+      setIncoming((current) =>
+        current.map((item) => {
+          const next = item.status === "done" ? item : { ...item, status: "canceled" as const };
+          incomingRef.current.set(item.id, next);
+          return next;
+        })
+      );
+      activeSendRef.current = false;
+    }
+
+    if (message.type === "peer-leave") {
+      transferCanceledRef.current = true;
+      activeSendRef.current = false;
+      suppressCloseStatusRef.current = true;
+      setPeerName("Waiting for peer");
+      setState("idle");
+      setStatusText(`${message.peerName} left the room. Create or join a room to connect again.`);
+      destroyPeerConnection();
     }
 
     if (message.type === "transfer-complete") {
@@ -1041,6 +1076,51 @@ function App() {
     setFiles((current) => current.map((item) => (item.id === fileId ? { ...item, status: "canceled" } : item)));
   }
 
+  function cancelTransfer() {
+    transferCanceledRef.current = true;
+    activeSendRef.current = false;
+    files.forEach((file) => {
+      if (file.status !== "done") {
+        sendPausedRef.current[file.id] = true;
+      }
+    });
+    sendControl({ type: "transfer-cancel", senderName: deviceName });
+    setFiles((current) => current.map((item) => (item.status === "done" ? item : { ...item, status: "canceled" })));
+    setIncoming((current) =>
+      current.map((item) => {
+        const next = item.status === "done" ? item : { ...item, status: "canceled" as const };
+        incomingRef.current.set(item.id, next);
+        return next;
+      })
+    );
+    setState(peerDataRef.current?.open || channelRef.current?.readyState === "open" ? "connected" : "idle");
+    setStatusText("Transfer canceled. The room is still open if you want to send another batch.");
+  }
+
+  function leaveRoom() {
+    transferCanceledRef.current = true;
+    activeSendRef.current = false;
+    suppressCloseStatusRef.current = true;
+    sendControl({ type: "peer-leave", peerName: deviceName });
+    destroyPeerConnection();
+    channelRef.current?.close();
+    peerRef.current?.close();
+    peerDataRef.current = null;
+    peerJsRef.current = null;
+    peerRef.current = null;
+    channelRef.current = null;
+    fallbackModeRef.current = false;
+    targetSocketIdRef.current = null;
+    setRole(null);
+    setRoomCode("");
+    setJoinCode("");
+    setQrData("");
+    setPeerName("Waiting for peer");
+    setState("idle");
+    setSocketReady(false);
+    setStatusText("You left the room. Create or join one to start sharing again.");
+  }
+
   async function sendText() {
     if (!sharedText.trim()) return;
     sendControl({
@@ -1079,10 +1159,10 @@ function App() {
   }
 
   async function waitWhilePaused(fileId: string) {
-    if (!sendPausedRef.current[fileId]) return;
+    if (!sendPausedRef.current[fileId] || transferCanceledRef.current) return;
     await new Promise<void>((resolve) => {
       const timer = window.setInterval(() => {
-        if (!sendPausedRef.current[fileId]) {
+        if (!sendPausedRef.current[fileId] || transferCanceledRef.current) {
           window.clearInterval(timer);
           resolve();
         }
@@ -1098,6 +1178,7 @@ function App() {
     if (activeFiles.length === 0) return;
 
     activeSendRef.current = true;
+    transferCanceledRef.current = false;
     totalBytesRef.current = activeFiles.reduce((sum, file) => sum + (file.file.size - file.transferredBytes), 0);
     movedBytesRef.current = 0;
     speedWindowRef.current = [];
@@ -1123,6 +1204,7 @@ function App() {
     setState("transferring");
 
     for (const item of activeFiles) {
+      if (transferCanceledRef.current) break;
       sendControl({ type: "file-start", fileId: item.id });
       setFiles((current) => current.map((file) => (file.id === item.id ? { ...file, status: "sending" } : file)));
 
@@ -1130,10 +1212,12 @@ function App() {
       let lastProgressUpdate = 0;
       const chunkSize = getTransferChunkSize(Boolean(peerDataRef.current?.open), fallbackModeRef.current);
       setStatusText(`High-speed transfer active (${formatBytes(chunkSize)} chunks). Keep both devices awake.`);
-      while (offset < item.file.size) {
+      while (offset < item.file.size && !transferCanceledRef.current) {
         if (sendPausedRef.current[item.id]) {
           await waitWhilePaused(item.id);
         }
+
+        if (transferCanceledRef.current || sendPausedRef.current[item.id]) break;
 
         await waitForBuffer(getTransferDataChannel());
 
@@ -1166,7 +1250,15 @@ function App() {
         }
       }
 
+      if (transferCanceledRef.current || sendPausedRef.current[item.id]) break;
       sendControl({ type: "file-complete", fileId: item.id });
+    }
+
+    if (transferCanceledRef.current) {
+      activeSendRef.current = false;
+      setState(peerDataRef.current?.open || channelRef.current?.readyState === "open" ? "connected" : "idle");
+      setStatusText("Transfer canceled. The room is still open if you want to send another batch.");
+      return;
     }
 
     sendControl({ type: "transfer-complete" });
@@ -1194,6 +1286,11 @@ function App() {
     { id: "tools", label: "Tools", meta: receivedTexts.length ? `${receivedTexts.length} notes` : "Notes" },
     { id: "history", label: "History", meta: `${history.length} recent` }
   ];
+  const hasRoom = Boolean(roomCode || peerDataRef.current?.open || channelRef.current?.readyState === "open");
+  const canCancelTransfer =
+    state === "transferring" ||
+    files.some((file) => file.status === "queued" || file.status === "sending" || file.status === "paused") ||
+    incoming.some((file) => file.status === "queued" || file.status === "receiving");
 
   return (
     <div className="shell">
@@ -1273,6 +1370,8 @@ function App() {
             <button onClick={scannerActive ? stopQrScanner : startQrScanner}>
               {scannerActive ? "Stop camera" : "Scan QR"}
             </button>
+            <button className="danger" onClick={cancelTransfer} disabled={!canCancelTransfer}>Cancel transfer</button>
+            <button onClick={leaveRoom} disabled={!hasRoom}>Leave room</button>
           </div>
           <label className="field">
             <span>Join code</span>
