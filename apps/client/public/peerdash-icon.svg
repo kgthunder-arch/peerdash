@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PeerDash icon">
+  <rect width="512" height="512" rx="112" fill="#08111d"/>
+  <path d="M146 256c0-60.8 49.2-110 110-110s110 49.2 110 110-49.2 110-110 110-110-49.2-110-110Z" fill="#12243a"/>
+  <path d="M134 257h244" stroke="#f4f7fb" stroke-width="38" stroke-linecap="round"/>
+  <path d="m307 185 72 72-72 72" fill="none" stroke="#4df2c4" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="134" cy="257" r="54" fill="#ffcf5a"/>
+  <circle cx="134" cy="257" r="18" fill="#08111d"/>
+</svg>

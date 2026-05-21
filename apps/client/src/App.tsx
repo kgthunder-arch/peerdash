@@ -727,6 +727,7 @@ function App() {
 
     peer.on("connection", (connection) => {
       setPeerName((connection.metadata as { peerName?: string } | undefined)?.peerName ?? "Receiver");
+      setStatusText("Receiver found. Opening the peer-to-peer lane...");
       setupPeerDataConnection(connection);
     });
 
@@ -752,6 +753,7 @@ function App() {
     peerJsRef.current = peer;
 
     peer.on("open", async () => {
+      setStatusText("Room found. Opening the peer-to-peer lane...");
       const connection = peer.connect(`${PEER_PREFIX}${activeCode.toLowerCase()}`, {
         reliable: true,
         metadata: { peerName: deviceName }
@@ -1159,7 +1161,7 @@ function App() {
           </label>
           <div className="actions">
             <button className="primary" onClick={createRoom}>Create sender room</button>
-            <button onClick={joinRoom}>Join as receiver</button>
+            <button onClick={() => joinRoom()}>Join as receiver</button>
             <button onClick={scannerActive ? stopQrScanner : startQrScanner}>
               {scannerActive ? "Stop camera" : "Scan QR"}
             </button>
