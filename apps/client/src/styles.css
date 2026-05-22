@@ -48,6 +48,120 @@
   50% { box-shadow: 0 0 20px rgba(55, 212, 170, 0.3), inset 0 0 0 1px rgba(55, 212, 170, 0.4); }
 }
 
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-8px); }
+  50% { transform: translateY(-4px); }
+  75% { transform: translateY(-8px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes checkmark {
+  0% {
+    stroke-dasharray: 60;
+    stroke-dashoffset: 60;
+  }
+  100% {
+    stroke-dasharray: 60;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUpStagger {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fileUploadPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(55, 212, 170, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(55, 212, 170, 0);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -104,20 +218,46 @@ button,
   color: inherit;
   cursor: pointer;
   text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+button::before,
+.button-like::before,
+.download::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+button:active::before:not(:disabled),
+.button-like:active::before,
+.download:active::before {
+  width: 300px;
+  height: 300px;
 }
 
 button:hover:not(:disabled), .button-like:hover, .download:hover {
-  transform: translateY(-2px);
-  background: rgba(244, 247, 251, 0.12);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-3px);
+  background: rgba(244, 247, 251, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  animation: slideUpStagger 0.3s ease;
 }
 
 button:active:not(:disabled), .button-like:active, .download:active {
-  transform: translateY(0) scale(0.97);
+  transform: translateY(-1px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 button.primary {
@@ -210,6 +350,7 @@ button:disabled {
 .status-pill {
   position: relative;
   overflow: hidden;
+  animation: slideInLeft 0.5s ease backwards;
 }
 
 .status-pill::after {
@@ -232,6 +373,18 @@ button:disabled {
   padding: 0.75rem;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
+  animation: slideInUp 0.5s ease backwards;
+  transition: all 0.3s ease;
+}
+
+.metrics div:nth-child(1) { animation-delay: 0s; }
+.metrics div:nth-child(2) { animation-delay: 0.1s; }
+.metrics div:nth-child(3) { animation-delay: 0.2s; }
+
+.metrics div:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(55, 212, 170, 0.2);
+  transform: translateY(-2px);
 }
 
 .metrics strong {
@@ -308,7 +461,13 @@ button:disabled {
   display: grid;
   gap: 0.45rem;
   margin-bottom: 0.85rem;
+  animation: slideInUp 0.4s ease backwards;
 }
+
+.field:nth-child(1) { animation-delay: 0s; }
+.field:nth-child(2) { animation-delay: 0.05s; }
+.field:nth-child(3) { animation-delay: 0.1s; }
+.field:nth-child(n+4) { animation-delay: 0.15s; }
 
 input,
 textarea {
@@ -318,13 +477,21 @@ textarea {
   background: rgba(255, 255, 255, 0.04);
   color: inherit;
   padding: 0.9rem 1rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+input:hover,
+textarea:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 input:focus, textarea:focus {
   outline: none;
-  border-color: #4095ff;
-  box-shadow: 0 0 0 3px rgba(64, 149, 255, 0.2);
+  border-color: #37d4aa;
+  box-shadow: 0 0 0 3px rgba(55, 212, 170, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  animation: scaleIn 0.3s ease;
 }
 
 .actions {
@@ -459,6 +626,22 @@ input:focus, textarea:focus {
 .row {
   padding: 0.9rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  animation: slideInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards;
+  transition: all 0.3s ease;
+}
+
+.row:nth-child(1) { animation-delay: 0s; }
+.row:nth-child(2) { animation-delay: 0.05s; }
+.row:nth-child(3) { animation-delay: 0.1s; }
+.row:nth-child(4) { animation-delay: 0.15s; }
+.row:nth-child(5) { animation-delay: 0.2s; }
+.row:nth-child(n+6) { animation-delay: 0.25s; }
+
+.row:hover {
+  padding-left: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
 .row:first-child {
@@ -478,6 +661,7 @@ progress {
   width: 100%;
   height: 10px;
   accent-color: #37d4aa;
+  animation: fadeInScale 0.5s ease;
 }
 
 progress::-webkit-progress-bar {
@@ -501,6 +685,21 @@ progress::-moz-progress-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
+}
+
+.chip {
+  animation: slideInUp 0.4s ease backwards;
+  transition: all 0.3s ease;
+}
+
+.chip:nth-child(1) { animation-delay: 0s; }
+.chip:nth-child(2) { animation-delay: 0.05s; }
+.chip:nth-child(3) { animation-delay: 0.1s; }
+.chip:nth-child(n+4) { animation-delay: 0.15s; }
+
+.chip:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(55, 212, 170, 0.3);
 }
 
 @media (max-width: 920px) {
@@ -607,9 +806,12 @@ progress::-moz-progress-bar {
 }
 
 .panel.drag-active {
-  border-color: #4095ff;
-  background: rgba(64, 149, 255, 0.1);
-  box-shadow: 0 0 20px rgba(64, 149, 255, 0.2);
+  border-color: #37d4aa;
+  background: rgba(55, 212, 170, 0.1);
+  box-shadow: 0 0 30px rgba(55, 212, 170, 0.3);
+  animation: fileUploadPulse 1.5s ease infinite;
+  transform: scale(1.01);
+  transition: all 0.3s ease;
 }
 
 .row-info {
@@ -624,6 +826,14 @@ progress::-moz-progress-bar {
   object-fit: cover;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
+  animation: fadeInScale 0.5s ease;
+  transition: all 0.3s ease;
+}
+
+.thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(55, 212, 170, 0.3);
+  border-radius: 12px;
 }
 
 /* Light Theme Overrides */
@@ -699,6 +909,252 @@ progress::-moz-progress-bar {
 
 :root[data-theme='light'] .row {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ── Connection Badge ─────────────────────────────────────────────────────── */
+@keyframes badgePop {
+  0% { transform: scale(0.8); opacity: 0; }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  animation: badgePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: all 0.35s ease;
+}
+
+.badge-p2p {
+  background: rgba(55, 212, 170, 0.18);
+  color: #37d4aa;
+  border: 1px solid rgba(55, 212, 170, 0.35);
+  box-shadow: 0 0 12px rgba(55, 212, 170, 0.2);
+}
+
+.badge-relay {
+  background: rgba(255, 207, 90, 0.18);
+  color: #ffcf5a;
+  border: 1px solid rgba(255, 207, 90, 0.35);
+}
+
+.badge-waiting {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(244, 247, 251, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ── Toast Notification ───────────────────────────────────────────────────── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-16px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+
+.toast {
+  position: fixed;
+  top: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8000;
+  background: linear-gradient(135deg, #37d4aa, #4095ff);
+  color: #07111b;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(55, 212, 170, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: toastIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Image Preview Modal ──────────────────────────────────────────────────── */
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes previewImgIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  cursor: zoom-out;
+  animation: backdropIn 0.25s ease both;
+}
+
+.preview-img {
+  max-width: min(92vw, 900px);
+  max-height: 80vh;
+  border-radius: 18px;
+  object-fit: contain;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  animation: previewImgIn 0.3s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+  cursor: default;
+}
+
+.preview-close {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f4f7fb;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 9001;
+}
+
+.preview-close:hover {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: #ff6b6b;
+  transform: scale(1.1);
+}
+
+.preview-name {
+  color: rgba(244, 247, 251, 0.75);
+  font-size: 0.9rem;
+  max-width: 80vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+/* ── Speed Sparkline ──────────────────────────────────────────────────────── */
+.sparkline {
+  display: block;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(55, 212, 170, 0.5));
+}
+
+/* ── File-type Emoji Icon ─────────────────────────────────────────────────── */
+.file-icon {
+  font-size: 2rem;
+  line-height: 1;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  flex-shrink: 0;
+  animation: fadeInScale 0.4s ease;
+}
+
+/* ── Clickable Thumbnail ──────────────────────────────────────────────────── */
+.thumb-clickable {
+  cursor: zoom-in;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.thumb-clickable:hover {
+  transform: scale(1.15);
+  box-shadow: 0 8px 24px rgba(55, 212, 170, 0.4);
+  border-radius: 12px;
+}
+
+/* ── Drop Hint (empty state) ──────────────────────────────────────────────── */
+.drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  animation: riseIn 0.5s ease both;
+}
+
+.drop-hint-icon {
+  font-size: 3rem;
+  animation: softFloat 4s ease-in-out infinite;
+  line-height: 1;
+}
+
+.drop-hint p {
+  color: rgba(244, 247, 251, 0.55);
+  max-width: 30ch;
+  margin: 0;
+}
+
+/* ── Rejoin Button (history) ──────────────────────────────────────────────── */
+.rejoin-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  background: rgba(55, 212, 170, 0.12);
+  color: #37d4aa;
+  border: 1px solid rgba(55, 212, 170, 0.25);
+  transition: all 0.25s ease;
+}
+
+.rejoin-btn:hover:not(:disabled) {
+  background: rgba(55, 212, 170, 0.22);
+  box-shadow: 0 4px 14px rgba(55, 212, 170, 0.3);
+  transform: translateY(-2px);
+}
+
+/* ── Light Theme Overrides (new elements) ─────────────────────────────────── */
+:root[data-theme='light'] .badge-waiting {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(8, 17, 29, 0.5);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme='light'] .toast {
+  color: #07111b;
+}
+
+:root[data-theme='light'] .file-icon {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme='light'] .drop-hint p {
+  color: rgba(8, 17, 29, 0.5);
+}
+
+:root[data-theme='light'] .rejoin-btn {
+  background: rgba(55, 212, 170, 0.1);
+  border-color: rgba(55, 212, 170, 0.3);
+}
+
+:root[data-theme='light'] .preview-backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+:root[data-theme='light'] .preview-name {
+  color: rgba(244, 247, 251, 0.9);
 }
 
 @media (prefers-reduced-motion: reduce) {
