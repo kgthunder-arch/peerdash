@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: peerdash
+      POSTGRES_USER: peerdash
+      POSTGRES_PASSWORD: development_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peerdash"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Server
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://peerdash:development_password@postgres:5432/peerdash
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      PORT: 3001
+      CORS_ORIGIN: http://localhost:5173,http://localhost:3000
+      JWT_SECRET: your-secret-key-change-in-production
+      LOG_LEVEL: debug
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/server/src:/app/apps/server/src
+
+  # Client (optional for development)
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile.dev
+    environment:
+      VITE_SIGNAL_SERVER_URL: http://localhost:3001
+      VITE_API_URL: http://localhost:3001/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/client/src:/app/apps/client/src
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: peerdash_network

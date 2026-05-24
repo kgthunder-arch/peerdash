@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/lib/storage.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/encryptionbadge.tsx","./src/components/loginscreen.tsx","./src/components/notificationtoast.tsx","./src/components/onboardingtutorial.tsx","./src/components/upgrademodal.tsx","./src/components/userheader.tsx","./src/lib/encryption.ts","./src/lib/landiscovery.ts","./src/lib/storage.ts","./src/lib/transferencryption.ts","./src/store/auth.ts","./src/store/subscription.ts"],"version":"5.9.3"}

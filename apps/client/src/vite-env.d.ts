@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
-declare module "react" {
+declare namespace React {
   interface InputHTMLAttributes<T> {
-    webkitdirectory?: string;
+    webkitdirectory?: boolean | string;
     directory?: string;
   }
 }

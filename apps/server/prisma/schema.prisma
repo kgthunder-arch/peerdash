@@ -1,0 +1,104 @@
+// Database schema setup with Prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String?
+  avatarUrl          String?
+  oauthProvider      String    // "google" | "apple"
+  oauthId            String    @unique
+  subscriptionTier   String    @default("free") // "free" | "pro" | "enterprise"
+  quotaUsedBytes     BigInt    @default(0)
+  quotaLimitBytes    BigInt    @default(536870912) // 500MB free tier
+  
+  // Relations
+  devices            Device[]
+  sentTransfers      Transfer[] @relation("sender")
+  receivedTransfers  Transfer[] @relation("receiver")
+  subscription       Subscription?
+  analyticsEvents    AnalyticsEvent[]
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Device {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name               String
+  deviceKey          String    @unique
+  publicKey          String
+  privateKeyEncrypted String? // Encrypted with user's password
+  lastSeenAt         DateTime?
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  @@index([userId])
+}
+
+model Transfer {
+  id                 String    @id @default(cuid())
+  senderId           String
+  sender             User      @relation("sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId         String
+  receiver           User      @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  roomCode           String
+  status             String    // "pending" | "active" | "completed" | "failed"
+  totalBytes         BigInt
+  transferredBytes   BigInt    @default(0)
+  fileCount          Int
+  filesMetadata      Json?
+  encryptedKey       String?
+  
+  startsAt           DateTime?
+  completedAt        DateTime?
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([roomCode])
+}
+
+model Subscription {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  stripeCustomerId   String?   @unique
+  stripeSubscriptionId String?
+  tier               String    // "free" | "pro" | "enterprise"
+  status             String    // "active" | "canceled" | "past_due"
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model AnalyticsEvent {
+  id                 String    @id @default(cuid())
+  userId             String?
+  user               User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  eventName          String
+  eventData          Json?
+  
+  createdAt          DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([eventName])
+}

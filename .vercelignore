@@ -1,0 +1,9 @@
+apps/server/src/
+apps/client/android/
+apps/client/public/
+.git/
+.github/
+node_modules/
+*.log
+.env.local
+.env.*.local

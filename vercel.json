@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "env": {
+    "VITE_SIGNAL_SERVER_URL": "@vite_signal_server_url"
+  },
+  "builds": [
+    {
+      "src": "apps/client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "apps/client/dist/index.html",
+      "status": 200
+    }
+  ]
+}
