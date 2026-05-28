@@ -1,19 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "buildCommand": "cd apps/client && npm run build",
+  "installCommand": "npm install && cd apps/client && npm install",
+  "outputDirectory": "apps/client/dist",
   "env": {
-    "VITE_SIGNAL_SERVER_URL": "@vite_signal_server_url"
+    "VITE_SIGNAL_SERVER_URL": "@vite_signal_server_url",
+    "VITE_API_URL": "@vite_api_url",
+    "VITE_GOOGLE_CLIENT_ID": "@vite_google_client_id"
   },
-  "builds": [
-    {
-      "src": "apps/client/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
   "routes": [
     {
       "src": "/(.*)",

@@ -1,0 +1,226 @@
+================================================================================
+                    FIX: BLANK WHITE SCREEN
+================================================================================
+
+PROBLEM: Frontend shows blank white screen instead of PeerDash UI
+
+ROOT CAUSE: Environment variables not passed to Vercel build
+
+SOLUTION: Add environment variables to Vercel and redeploy
+
+================================================================================
+STEP-BY-STEP FIX (5 MINUTES)
+================================================================================
+
+STEP 1: GO TO VERCEL DASHBOARD
+
+  1. Visit: https://vercel.com/dashboard/peerdash
+  2. Click the "peerdash" project
+  3. Click "Settings" tab
+
+STEP 2: ADD ENVIRONMENT VARIABLES
+
+  1. Go to Settings → Environment Variables
+  2. Click "Add New"
+  3. Add these three variables:
+
+     Variable 1:
+       Name: VITE_SIGNAL_SERVER_URL
+       Value: https://peerdash-api.onrender.com
+       Environment: Production
+
+     Variable 2:
+       Name: VITE_API_URL
+       Value: https://peerdash-api.onrender.com/api
+       Environment: Production
+
+     Variable 3:
+       Name: VITE_GOOGLE_CLIENT_ID
+       Value: <your-google-client-id>
+       Environment: Production
+
+  4. Click "Save" for each variable
+
+IMPORTANT: Make sure "Production" is selected for each variable!
+
+STEP 3: REDEPLOY FRONTEND
+
+  1. Go to "Deployments" tab
+  2. Click the latest deployment
+  3. Click "Redeploy" button
+  4. Wait for build to complete (2-3 minutes)
+  5. Check status - should show "Ready"
+
+STEP 4: VERIFY FIX
+
+  1. Visit: https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+  2. Should see PeerDash UI (not blank)
+  3. Should see Google login button
+  4. Open browser console (F12) - should see no errors
+
+================================================================================
+WHAT TO DO IF STILL BLANK
+================================================================================
+
+OPTION 1: CLEAR BROWSER CACHE
+
+  1. Press Ctrl+Shift+Delete (Windows) or Cmd+Shift+Delete (Mac)
+  2. Select "All time"
+  3. Check "Cookies and other site data"
+  4. Click "Clear data"
+  5. Refresh page (F5)
+
+OPTION 2: HARD REFRESH
+
+  1. Press Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)
+  2. This clears cache and reloads page
+
+OPTION 3: TRY INCOGNITO/PRIVATE WINDOW
+
+  1. Open new incognito/private window
+  2. Visit: https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+  3. If it works, your cache was the issue
+
+OPTION 4: CHECK BROWSER CONSOLE
+
+  1. Press F12 to open developer tools
+  2. Click "Console" tab
+  3. Look for red error messages
+  4. Common errors:
+     - "Cannot read property of undefined"
+     - "Failed to fetch"
+     - "CORS error"
+     - "Unexpected token"
+
+OPTION 5: CHECK VERCEL LOGS
+
+  1. Go to https://vercel.com/dashboard/peerdash
+  2. Click "Deployments"
+  3. Click latest deployment
+  4. Click "Logs" tab
+  5. Look for build errors
+  6. Common errors:
+     - "npm ERR!"
+     - "TypeScript error"
+     - "Module not found"
+
+OPTION 6: CHECK ENVIRONMENT VARIABLES
+
+  1. Go to Vercel Settings → Environment Variables
+  2. Verify all three variables are present:
+     - VITE_SIGNAL_SERVER_URL
+     - VITE_API_URL
+     - VITE_GOOGLE_CLIENT_ID
+  3. Verify they're set for "Production"
+  4. Verify values are correct (no typos)
+  5. If missing, add them and redeploy
+
+================================================================================
+ENVIRONMENT VARIABLES REFERENCE
+================================================================================
+
+VITE_SIGNAL_SERVER_URL
+  - What: Backend WebSocket URL
+  - Value: https://peerdash-api.onrender.com
+  - Used for: Real-time signaling
+
+VITE_API_URL
+  - What: Backend REST API URL
+  - Value: https://peerdash-api.onrender.com/api
+  - Used for: API calls
+
+VITE_GOOGLE_CLIENT_ID
+  - What: Google OAuth Client ID
+  - Value: Your Google Client ID (from Google Cloud Console)
+  - Used for: Google login
+
+================================================================================
+VERIFICATION CHECKLIST
+================================================================================
+
+✅ Environment variables added to Vercel
+✅ Variables set for "Production" environment
+✅ VITE_SIGNAL_SERVER_URL = https://peerdash-api.onrender.com
+✅ VITE_API_URL = https://peerdash-api.onrender.com/api
+✅ VITE_GOOGLE_CLIENT_ID = your-client-id
+✅ Frontend redeployed
+✅ Build completed successfully
+✅ Browser cache cleared
+✅ Hard refresh done (Ctrl+Shift+R)
+✅ No errors in browser console
+✅ Backend is running (https://peerdash-api.onrender.com)
+✅ Google OAuth configured
+
+================================================================================
+EXPECTED RESULT AFTER FIX
+================================================================================
+
+✅ Frontend loads with PeerDash UI
+✅ Can see the main interface
+✅ Google login button visible
+✅ Dark/light theme toggle visible
+✅ No blank white screen
+✅ No errors in console
+✅ Can click login button
+✅ Redirects to Google login
+
+================================================================================
+COMMON ISSUES & SOLUTIONS
+================================================================================
+
+ISSUE: Still blank after redeploy
+SOLUTION: Clear browser cache and hard refresh (Ctrl+Shift+R)
+
+ISSUE: "Cannot reach backend" error
+SOLUTION: Check backend URL is correct and backend is running
+
+ISSUE: "Google OAuth not configured" error
+SOLUTION: Verify VITE_GOOGLE_CLIENT_ID is set correctly
+
+ISSUE: "CORS error" in console
+SOLUTION: Check CORS_ORIGIN in Render backend matches frontend URL
+
+ISSUE: "Module not found" error
+SOLUTION: Check Vercel build logs for missing dependencies
+
+ISSUE: "TypeScript error" in build
+SOLUTION: Check Vercel build logs for specific error
+
+================================================================================
+QUICK LINKS
+================================================================================
+
+Vercel Dashboard:       https://vercel.com/dashboard/peerdash
+Render Dashboard:       https://dashboard.render.com
+Google Cloud Console:   https://console.cloud.google.com
+GitHub:                 https://github.com/kgthunder-arch/peerdash
+
+Frontend URL:           https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+Backend URL:            https://peerdash-api.onrender.com
+
+================================================================================
+NEED MORE HELP?
+================================================================================
+
+1. Check FIX_BLANK_SCREEN.md for detailed troubleshooting
+2. Check Vercel docs: https://vercel.com/docs
+3. Check Render docs: https://render.com/docs
+4. Check GitHub issues: https://github.com/kgthunder-arch/peerdash/issues
+
+================================================================================
+SUMMARY
+================================================================================
+
+The blank screen is caused by missing environment variables.
+
+FIX:
+1. Add environment variables to Vercel
+2. Redeploy frontend
+3. Clear browser cache
+4. Hard refresh
+
+TIME: 5 minutes
+
+RESULT: Frontend should load with PeerDash UI
+
+================================================================================

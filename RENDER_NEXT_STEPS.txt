@@ -1,0 +1,279 @@
+================================================================================
+                    PEERDASH RENDER DEPLOYMENT GUIDE
+================================================================================
+
+✅ FRONTEND: LIVE ON VERCEL
+⏳ BACKEND: READY TO DEPLOY ON RENDER
+
+================================================================================
+STEP-BY-STEP DEPLOYMENT (20 MINUTES)
+================================================================================
+
+STEP 1: CREATE RENDER ACCOUNT (1 minute)
+  1. Go to https://render.com
+  2. Click "Sign up"
+  3. Sign up with GitHub
+  4. Authorize Render
+
+STEP 2: CREATE POSTGRESQL DATABASE (2 minutes)
+  1. Go to https://dashboard.render.com
+  2. Click "New +" → "PostgreSQL"
+  3. Fill in:
+     - Name: peerdash-db
+     - Database: peerdash
+     - User: peerdash
+     - Region: Choose closest to you
+  4. Click "Create Database"
+  5. COPY the "Internal Database URL" (you'll need this!)
+
+STEP 3: CREATE REDIS INSTANCE (2 minutes)
+  1. Go to https://dashboard.render.com
+  2. Click "New +" → "Redis"
+  3. Fill in:
+     - Name: peerdash-redis
+     - Region: Same as PostgreSQL
+     - Eviction Policy: allkeys-lru
+  4. Click "Create Redis"
+  5. COPY the "Internal Redis URL" (you'll need this!)
+
+STEP 4: CREATE WEB SERVICE (2 minutes)
+  1. Go to https://dashboard.render.com
+  2. Click "New +" → "Web Service"
+  3. Select "Deploy an existing repository"
+  4. Search for: kgthunder-arch/peerdash
+  5. Fill in:
+     - Name: peerdash-api
+     - Environment: Node
+     - Region: Same as DB and Redis
+     - Branch: main
+     - Build Command: npm run build
+     - Start Command: npm start
+     - Root Directory: apps/server
+  6. Click "Create Web Service"
+
+STEP 5: ADD ENVIRONMENT VARIABLES (2 minutes)
+  In Web Service → Environment, add these variables:
+
+  DATABASE_URL=<paste-from-step-2>
+  REDIS_URL=<paste-from-step-3>
+  NODE_ENV=production
+  PORT=3001
+  API_BASE_URL=https://peerdash-api.onrender.com
+  CORS_ORIGIN=https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+  JWT_SECRET=<run: openssl rand -base64 32>
+  JWT_EXPIRY=15m
+  REFRESH_TOKEN_EXPIRY=7d
+  GOOGLE_CLIENT_ID=<your-google-client-id>
+  GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+  LOG_LEVEL=info
+
+STEP 6: WAIT FOR DEPLOYMENT (5 minutes)
+  Render will automatically:
+  1. Clone your repository
+  2. Install dependencies
+  3. Build the project
+  4. Start the server
+  
+  Watch the logs in real-time. Takes 3-5 minutes.
+
+STEP 7: RUN DATABASE MIGRATIONS (1 minute)
+  1. Go to Web Service → Shell tab
+  2. Run these commands:
+     cd apps/server
+     npx prisma migrate deploy
+     npx prisma generate
+
+STEP 8: UPDATE FRONTEND ENVIRONMENT VARIABLES (2 minutes)
+  1. Go to https://vercel.com/dashboard
+  2. Select "peerdash" project
+  3. Go to Settings → Environment Variables
+  4. Update for Production:
+     VITE_SIGNAL_SERVER_URL=https://peerdash-api.onrender.com
+     VITE_API_URL=https://peerdash-api.onrender.com/api
+     VITE_GOOGLE_CLIENT_ID=<your-google-client-id>
+  5. Go to Deployments → Click latest → Redeploy
+
+STEP 9: CONFIGURE GOOGLE OAUTH (2 minutes)
+  1. Go to https://console.cloud.google.com
+  2. Select your project
+  3. Go to APIs & Services → Credentials
+  4. Edit your OAuth 2.0 Client
+  5. Add authorized redirect URIs:
+     - https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app/api/auth/google/callback
+     - https://peerdash-api.onrender.com/api/auth/google/callback
+  6. Save
+
+STEP 10: TEST (5 minutes)
+  1. Visit https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+  2. Click "Sign in with Google"
+  3. You should be redirected to Google login
+  4. After login, you should see the dashboard
+  5. Try creating a transfer
+  6. Verify the lock icon appears (encryption working)
+
+================================================================================
+ENVIRONMENT VARIABLES EXPLAINED
+================================================================================
+
+DATABASE_URL
+  - PostgreSQL connection string
+  - Get from: Render PostgreSQL service → Internal Database URL
+  - Format: postgresql://user:password@host:5432/database
+
+REDIS_URL
+  - Redis connection string
+  - Get from: Render Redis service → Internal Redis URL
+  - Format: redis://user:password@host:6379
+
+JWT_SECRET
+  - Secret key for signing JWT tokens
+  - Generate: openssl rand -base64 32
+  - Must be at least 32 characters
+  - Keep it secret!
+
+GOOGLE_CLIENT_ID & GOOGLE_CLIENT_SECRET
+  - OAuth credentials from Google Cloud Console
+  - Get from: https://console.cloud.google.com
+  - Used for Google login
+
+API_BASE_URL
+  - Your backend URL
+  - Will be: https://peerdash-api.onrender.com
+  - Used for API calls
+
+CORS_ORIGIN
+  - Your frontend URL
+  - Is: https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+  - Allows frontend to call backend
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+BUILD FAILS
+  Error: "Cannot find module"
+  Solution: Make sure npm run build works locally first
+  Run: cd apps/server && npm install && npm run build
+
+DATABASE CONNECTION FAILS
+  Error: "Cannot connect to database"
+  Solution:
+    1. Check DATABASE_URL is correct
+    2. Verify database is running in Render dashboard
+    3. Check firewall allows connections
+
+OAUTH LOGIN FAILS
+  Error: "Redirect URI mismatch"
+  Solution:
+    1. Check redirect URIs in Google Cloud Console
+    2. Ensure they match exactly (including https://)
+    3. Wait 5 minutes for changes to propagate
+
+WEBRTC NOT CONNECTING
+  Error: "Cannot establish peer connection"
+  Solution:
+    1. Check CORS_ORIGIN is set correctly
+    2. Verify backend is running
+    3. Check browser console for errors
+
+================================================================================
+IMPORTANT LINKS
+================================================================================
+
+Render Dashboard:        https://dashboard.render.com
+Google Cloud Console:    https://console.cloud.google.com
+Vercel Dashboard:        https://vercel.com/dashboard/peerdash
+GitHub Repository:       https://github.com/kgthunder-arch/peerdash
+
+Frontend URL:            https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+Backend URL (after):     https://peerdash-api.onrender.com
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+For detailed step-by-step instructions:
+  See: RENDER_DEPLOYMENT_GUIDE.md
+
+For quick reference:
+  See: RENDER_QUICK_START.md
+
+For tracking progress:
+  See: RENDER_DEPLOYMENT_CHECKLIST.md
+
+For overview:
+  See: RENDER_DEPLOYMENT_SUMMARY.md
+
+================================================================================
+QUICK REFERENCE: ENVIRONMENT VARIABLES
+================================================================================
+
+DATABASE_URL=postgresql://peerdash:password@host:5432/peerdash
+REDIS_URL=redis://default:password@host:6379
+NODE_ENV=production
+PORT=3001
+API_BASE_URL=https://peerdash-api.onrender.com
+CORS_ORIGIN=https://peerdash-bq3w0cdbj-thunder-b46ae398.vercel.app
+JWT_SECRET=<generate-with-openssl>
+JWT_EXPIRY=15m
+REFRESH_TOKEN_EXPIRY=7d
+GOOGLE_CLIENT_ID=<your-id>
+GOOGLE_CLIENT_SECRET=<your-secret>
+LOG_LEVEL=info
+
+================================================================================
+SUCCESS INDICATORS
+================================================================================
+
+After deployment, verify:
+
+✅ Backend URL is accessible: https://peerdash-api.onrender.com
+✅ Database is connected
+✅ Redis is connected
+✅ Frontend can reach backend
+✅ Google OAuth login works
+✅ Can create transfers
+✅ Encryption working (lock icon)
+✅ Files transfer successfully
+✅ No errors in logs
+
+================================================================================
+DEPLOYMENT TIMELINE
+================================================================================
+
+Create Render account:     1 minute
+Create PostgreSQL:         2 minutes
+Create Redis:              2 minutes
+Deploy backend:            5 minutes
+Run migrations:            1 minute
+Update frontend:           2 minutes
+Configure OAuth:           2 minutes
+Test:                      5 minutes
+                          ─────────
+TOTAL:                    ~20 minutes
+
+================================================================================
+STATUS
+================================================================================
+
+Frontend:  ✅ LIVE on Vercel
+Backend:   ⏳ READY to deploy on Render
+Database:  ⏳ Ready to create
+Redis:     ⏳ Ready to create
+OAuth:     ⏳ Ready to configure
+
+Overall:   50% Complete → Ready for backend deployment
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Follow the 10-step deployment guide above
+2. Or see RENDER_QUICK_START.md for condensed version
+3. Or see RENDER_DEPLOYMENT_GUIDE.md for detailed version
+
+Estimated time: 20 minutes
+
+After deployment, your PeerDash will be fully functional!
+
+================================================================================
