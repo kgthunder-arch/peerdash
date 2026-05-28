@@ -63,6 +63,18 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleTokenI
   return res.data;
 }
 
+/**
+ * Verify a Google access token from the OAuth popup flow.
+ * This is the token returned by @react-oauth/google's useGoogleLogin hook.
+ */
+export async function verifyGoogleAccessToken(accessToken: string): Promise<GoogleTokenInfo> {
+  const res = await axios.get<GoogleTokenInfo>(
+    "https://www.googleapis.com/oauth2/v3/userinfo",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return res.data;
+}
+
 // ─── Apple ───────────────────────────────────────────────────────────────────
 
 interface AppleTokenInfo {

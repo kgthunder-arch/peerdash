@@ -64,7 +64,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const body = mode === "access_token"
-            ? { idToken: credential }   // server uses tokeninfo endpoint for access tokens too
+            ? { accessToken: credential }
             : { idToken: credential };
 
           const response = await axios.post(`${API_URL}/auth/google`, body);

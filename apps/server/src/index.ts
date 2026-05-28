@@ -13,7 +13,7 @@ import { generateAccessToken, generateRefreshToken, verifyToken, authMiddleware,
 import { generateKeyPair } from "./encryption.js";
 import { prisma, connectDB } from "./db.js";
 import { connectRedis, cacheSet, cacheGet, cacheDel } from "./redis.js";
-import { verifyGoogleCode, verifyGoogleIdToken, verifyAppleIdToken } from "./oauth.js";
+import { verifyGoogleAccessToken, verifyGoogleCode, verifyGoogleIdToken, verifyAppleIdToken } from "./oauth.js";
 
 dotenv.config();
 
@@ -81,12 +81,16 @@ function makeTokenPair(user: { id: string; email: string; oauthProvider: string 
 // Google — accepts either an authorization code OR an id_token (from @react-oauth/google)
 app.post("/api/auth/google", async (req: Request, res: Response) => {
   try {
-    const { code, idToken } = req.body as { code?: string; idToken?: string };
-    if (!code && !idToken) return res.status(400).json({ error: "code or idToken required" }) as any;
+    const { code, idToken, accessToken } = req.body as { code?: string; idToken?: string; accessToken?: string };
+    if (!code && !idToken && !accessToken) {
+      return res.status(400).json({ error: "code, idToken, or accessToken required" }) as any;
+    }
 
     let info: { sub: string; email: string; name?: string; picture?: string };
     if (idToken) {
       info = await verifyGoogleIdToken(idToken);
+    } else if (accessToken) {
+      info = await verifyGoogleAccessToken(accessToken);
     } else {
       info = await verifyGoogleCode(code!);
     }
