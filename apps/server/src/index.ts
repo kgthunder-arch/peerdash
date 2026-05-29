@@ -54,7 +54,7 @@ const io = new Server(httpServer, {
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 
-app.get("/health", (_req, res) => {
+app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "peerdash-signal", version: "2.0.0" });
 });
 
@@ -413,7 +413,7 @@ app.post("/api/analytics/events", optionalAuthMiddleware, async (req: Request, r
 
 // ─── TURN credentials (short-lived) ──────────────────────────────────────────
 
-app.get("/api/turn-credentials", optionalAuthMiddleware, (_req, res) => {
+app.get("/api/turn-credentials", optionalAuthMiddleware, (_req: Request, res: Response) => {
   const turnUrl = process.env.TURN_SERVER_URL;
   if (!turnUrl) {
     return res.json({ iceServers: [] }) as any;
