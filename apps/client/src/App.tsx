@@ -121,6 +121,18 @@ function isPeerSupported() { return Boolean(window.RTCPeerConnection && window.R
 function isIosSafari() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
 function chunkSize(direct: boolean, relay: boolean) { if (relay) return RELAY_CHUNK; if (isIosSafari()) return SAFARI_CHUNK; return direct ? DIRECT_CHUNK : SAFARI_CHUNK; }
 
+function fileIcon(name: string, mime: string): string {
+  if (mime.startsWith("image/")) return "🖼️";
+  if (mime.startsWith("video/")) return "🎬";
+  if (mime.startsWith("audio/")) return "🎵";
+  if (mime.includes("pdf")) return "📄";
+  if (mime.includes("zip") || mime.includes("tar") || name.endsWith(".7z") || name.endsWith(".rar")) return "🗜️";
+  if (mime.includes("text") || name.endsWith(".md") || name.endsWith(".txt")) return "📝";
+  if (name.endsWith(".apk")) return "📱";
+  if (mime.includes("spreadsheet") || name.endsWith(".xlsx") || name.endsWith(".csv")) return "📊";
+  return "📁";
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -196,6 +208,9 @@ function App() {
   const manifestSentRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [showFilePicker, setShowFilePicker] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const iceServersRef = useRef<RTCIceServer[]>(DEFAULT_ICE);
 
@@ -948,35 +963,166 @@ function App() {
           </div></section>
         )}
 
+        {/* ── Hidden file inputs (opacity:0 not display:none — works on mobile) ── */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="*/*"
+          onChange={onPickFiles}
+          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
+          tabIndex={-1}
+          aria-hidden
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          // @ts-ignore
+          webkitdirectory=""
+          accept="*/*"
+          onChange={onPickFiles}
+          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
+          tabIndex={-1}
+          aria-hidden
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*,video/*"
+          capture="environment"
+          onChange={onPickFiles}
+          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
+          tabIndex={-1}
+          aria-hidden
+        />
+        <input
+          ref={photoInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          onChange={onPickFiles}
+          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
+          tabIndex={-1}
+          aria-hidden
+        />
+
+        {/* ── Mobile file-picker bottom sheet ─────────────────────────────── */}
+        {showFilePicker && (
+          <div
+            className="picker-backdrop"
+            onClick={() => setShowFilePicker(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose how to add files"
+          >
+            <div className="picker-sheet" onClick={e => e.stopPropagation()}>
+              <div className="picker-handle" />
+              <p className="picker-title">Add files</p>
+              <div className="picker-grid">
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); setTimeout(() => fileInputRef.current?.click(), 80); }}
+                >
+                  <span className="picker-icon">📁</span>
+                  <span>Files</span>
+                </button>
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); setTimeout(() => photoInputRef.current?.click(), 80); }}
+                >
+                  <span className="picker-icon">🖼️</span>
+                  <span>Photos &amp; Videos</span>
+                </button>
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); setTimeout(() => cameraInputRef.current?.click(), 80); }}
+                >
+                  <span className="picker-icon">📷</span>
+                  <span>Camera</span>
+                </button>
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); setTimeout(() => folderInputRef.current?.click(), 80); }}
+                >
+                  <span className="picker-icon">📂</span>
+                  <span>Folder</span>
+                </button>
+              </div>
+              <button className="picker-cancel" onClick={() => setShowFilePicker(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
         {/* Send */}
         {activeSection === "send" && (
           <section className="app-section">
-            <div className={`panel${dragActive ? " drag-active" : ""}`} onDragOver={e => { e.preventDefault(); setDragActive(true); }} onDragLeave={e => { e.preventDefault(); setDragActive(false); }} onDrop={handleDrop}>
+            <div
+              className={`panel${dragActive ? " drag-active" : ""}`}
+              onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={e => { e.preventDefault(); setDragActive(false); }}
+              onDrop={handleDrop}
+            >
               <div className="panel-head">
                 <div><h3>Send queue</h3><p>{files.length} items · {formatBytes(totalOutgoing)}</p></div>
                 <div className="actions">
-                  <button className="button-like" onClick={() => fileInputRef.current?.click()}>Add files</button>
-                  <button className="button-like" onClick={() => folderInputRef.current?.click()}>Add folder</button>
-                  <button className="primary" onClick={sendQueuedFiles} disabled={files.length === 0 || connState === "idle" || connState === "signaling"}>Start transfer</button>
+                  <button
+                    className="primary"
+                    onClick={sendQueuedFiles}
+                    disabled={files.length === 0 || connState === "idle" || connState === "signaling"}
+                  >
+                    ▶ Start transfer
+                  </button>
+                  {files.length > 0 && (
+                    <button onClick={() => setFiles([])} style={{ color: "#ff6b6b" }}>Clear all</button>
+                  )}
                 </div>
-                <input ref={fileInputRef} type="file" multiple onChange={onPickFiles} hidden />
-                <input ref={folderInputRef} type="file" multiple webkitdirectory onChange={onPickFiles} hidden />
               </div>
+
+              {/* Big tap zone — shown when queue is empty */}
+              {files.length === 0 ? (
+                <button
+                  className="pick-zone"
+                  onClick={() => setShowFilePicker(true)}
+                  aria-label="Add files to send"
+                >
+                  <span className="pick-zone-icon">＋</span>
+                  <span className="pick-zone-label">Tap to add files</span>
+                  <span className="pick-zone-sub">Photos · Videos · Documents · Any file</span>
+                  <span className="pick-zone-sub" style={{ marginTop: "0.25rem", opacity: 0.45 }}>Or drag &amp; drop here</span>
+                </button>
+              ) : (
+                <button
+                  className="pick-zone pick-zone-compact"
+                  onClick={() => setShowFilePicker(true)}
+                  aria-label="Add more files"
+                >
+                  <span style={{ fontSize: "1.4rem" }}>＋</span>
+                  <span>Add more files</span>
+                </button>
+              )}
+
               <div className="list">
-                {files.length === 0 && <div className="empty-state"><p className="muted">Pick files or a folder to build the transfer batch.</p><small className="muted">You can also drag and drop files directly</small></div>}
                 {files.map((f, i) => {
                   const thumb = f.file.type.startsWith("image/") ? URL.createObjectURL(f.file) : null;
                   return (
                     <article key={f.id} className="row" style={{ animationDelay: `${i * 0.05}s` }}>
                       <div className="row-info">
-                        {thumb && <img src={thumb} className="thumb" alt="preview" />}
-                        <div><strong>{f.relativePath}</strong><p>{formatBytes(f.file.size)} · <span className="status-badge" data-status={f.status}>{f.status}</span></p></div>
+                        {thumb
+                          ? <img src={thumb} className="thumb" alt="preview" />
+                          : <span className="file-icon">{fileIcon(f.file.name, f.file.type)}</span>}
+                        <div>
+                          <strong>{f.relativePath}</strong>
+                          <p>{formatBytes(f.file.size)} · <span className="status-badge" data-status={f.status}>{f.status}</span></p>
+                        </div>
                       </div>
                       <div className="row-actions">
                         <progress max={100} value={f.progress} />
                         {f.status === "sending" && <button onClick={() => pauseFile(f.id)}>Pause</button>}
                         {f.status === "paused" && <button onClick={() => resumeFile(f.id)}>Resume</button>}
-                        {f.status !== "done" && f.status !== "canceled" && <button onClick={() => cancelFile(f.id)}>Cancel</button>}
+                        {f.status !== "done" && f.status !== "canceled" && (
+                          <button onClick={() => cancelFile(f.id)} aria-label="Remove file">✕</button>
+                        )}
                       </div>
                     </article>
                   );
