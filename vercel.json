@@ -3,16 +3,20 @@
   "buildCommand": "cd apps/client && npm run build",
   "installCommand": "npm install && cd apps/client && npm install",
   "outputDirectory": "apps/client/dist",
-  "env": {
-    "VITE_SIGNAL_SERVER_URL": "@vite_signal_server_url",
-    "VITE_API_URL": "@vite_api_url",
-    "VITE_GOOGLE_CLIENT_ID": "@vite_google_client_id"
-  },
   "routes": [
     {
+      "src": "/assets/(.*)",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" },
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(sw\\.js|manifest\\.json|peerdash-icon\\.svg)",
+      "headers": { "cache-control": "public, max-age=0, must-revalidate" },
+      "dest": "/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "apps/client/dist/index.html",
-      "status": 200
+      "dest": "/index.html"
     }
   ]
 }
