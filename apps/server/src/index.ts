@@ -195,7 +195,8 @@ app.get("/api/devices", authMiddleware, async (req: Request, res: Response) => {
 
 app.delete("/api/devices/:id", authMiddleware, async (req: Request, res: Response) => {
   const userId = (req as any).userId as string;
-  await prisma.device.deleteMany({ where: { id: req.params.id, userId } });
+  const deviceId = req.params.id as string;
+  await prisma.device.deleteMany({ where: { id: deviceId, userId } });
   res.json({ success: true });
 });
 
@@ -248,13 +249,14 @@ app.patch("/api/transfers/:id", authMiddleware, async (req: Request, res: Respon
     const data = schema.parse(req.body);
     const userId = (req as any).userId as string;
 
+    const transferId = req.params.id as string;
     const transfer = await prisma.transfer.findFirst({
-      where: { id: req.params.id, OR: [{ senderId: userId }, { receiverId: userId }] }
+      where: { id: transferId, OR: [{ senderId: userId }, { receiverId: userId }] }
     });
     if (!transfer) return res.status(404).json({ error: "Transfer not found" }) as any;
 
     const updated = await prisma.transfer.update({
-      where: { id: req.params.id },
+      where: { id: transferId },
       data: {
         ...(data.status && { status: data.status }),
         ...(data.transferredBytes !== undefined && { transferredBytes: BigInt(data.transferredBytes) }),
@@ -402,7 +404,7 @@ app.post("/api/analytics/events", optionalAuthMiddleware, async (req: Request, r
     const { eventName, eventData } = schema.parse(req.body);
     const userId = (req as any).userId as string | undefined;
 
-    await prisma.analyticsEvent.create({ data: { eventName, eventData, userId } });
+    await prisma.analyticsEvent.create({ data: { eventName, eventData: (eventData ?? null) as any, userId } });
     res.json({ success: true });
   } catch {
     res.json({ success: true }); // Never fail analytics
