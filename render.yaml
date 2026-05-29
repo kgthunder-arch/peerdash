@@ -3,9 +3,9 @@ services:
     name: peerdash-api
     env: node
     plan: free
-    buildCommand: npm run build
-    startCommand: npm start
     rootDir: apps/server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -28,17 +28,22 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: peerdash-db
+          property: connectionString
       - key: REDIS_URL
-        sync: false
+        fromService:
+          name: peerdash-redis
+          type: redis
+          property: connectionString
 
-  - type: pserv
-    name: peerdash-db
+databases:
+  - name: peerdash-db
     plan: free
-    ipAllowList: []
+    databaseName: peerdash
+    user: peerdash
 
   - type: redis
     name: peerdash-redis
     plan: free
     ipAllowList: []
-
