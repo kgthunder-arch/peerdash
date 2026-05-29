@@ -963,97 +963,6 @@ function App() {
           </div></section>
         )}
 
-        {/* ── Hidden file inputs (opacity:0 not display:none — works on mobile) ── */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="*/*"
-          onChange={onPickFiles}
-          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
-          tabIndex={-1}
-          aria-hidden
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          multiple
-          // @ts-ignore
-          webkitdirectory=""
-          accept="*/*"
-          onChange={onPickFiles}
-          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
-          tabIndex={-1}
-          aria-hidden
-        />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*,video/*"
-          capture="environment"
-          onChange={onPickFiles}
-          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
-          tabIndex={-1}
-          aria-hidden
-        />
-        <input
-          ref={photoInputRef}
-          type="file"
-          multiple
-          accept="image/*,video/*"
-          onChange={onPickFiles}
-          style={{ position: "fixed", opacity: 0, pointerEvents: "none", width: 0, height: 0, top: 0, left: 0 }}
-          tabIndex={-1}
-          aria-hidden
-        />
-
-        {/* ── Mobile file-picker bottom sheet ─────────────────────────────── */}
-        {showFilePicker && (
-          <div
-            className="picker-backdrop"
-            onClick={() => setShowFilePicker(false)}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose how to add files"
-          >
-            <div className="picker-sheet" onClick={e => e.stopPropagation()}>
-              <div className="picker-handle" />
-              <p className="picker-title">Add files</p>
-              <div className="picker-grid">
-                <button
-                  className="picker-opt"
-                  onClick={() => { setShowFilePicker(false); setTimeout(() => fileInputRef.current?.click(), 80); }}
-                >
-                  <span className="picker-icon">📁</span>
-                  <span>Files</span>
-                </button>
-                <button
-                  className="picker-opt"
-                  onClick={() => { setShowFilePicker(false); setTimeout(() => photoInputRef.current?.click(), 80); }}
-                >
-                  <span className="picker-icon">🖼️</span>
-                  <span>Photos &amp; Videos</span>
-                </button>
-                <button
-                  className="picker-opt"
-                  onClick={() => { setShowFilePicker(false); setTimeout(() => cameraInputRef.current?.click(), 80); }}
-                >
-                  <span className="picker-icon">📷</span>
-                  <span>Camera</span>
-                </button>
-                <button
-                  className="picker-opt"
-                  onClick={() => { setShowFilePicker(false); setTimeout(() => folderInputRef.current?.click(), 80); }}
-                >
-                  <span className="picker-icon">📂</span>
-                  <span>Folder</span>
-                </button>
-              </div>
-              <button className="picker-cancel" onClick={() => setShowFilePicker(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
-
         {/* Send */}
         {activeSection === "send" && (
           <section className="app-section">
@@ -1079,27 +988,39 @@ function App() {
                 </div>
               </div>
 
-              {/* Big tap zone — shown when queue is empty */}
+              {/* ── Direct label→input: zero JS, works on every Android browser ── */}
               {files.length === 0 ? (
-                <button
-                  className="pick-zone"
-                  onClick={() => setShowFilePicker(true)}
-                  aria-label="Add files to send"
-                >
+                <label className="pick-zone" htmlFor="pd-file-input" aria-label="Add files to send">
                   <span className="pick-zone-icon">＋</span>
-                  <span className="pick-zone-label">Tap to add files</span>
-                  <span className="pick-zone-sub">Photos · Videos · Documents · Any file</span>
-                  <span className="pick-zone-sub" style={{ marginTop: "0.25rem", opacity: 0.45 }}>Or drag &amp; drop here</span>
-                </button>
+                  <span className="pick-zone-label">Tap to choose files</span>
+                  <span className="pick-zone-sub">Opens your file manager directly</span>
+                  <span className="pick-zone-sub" style={{ marginTop: "0.25rem", opacity: 0.45 }}>
+                    Any file · Photos · Videos · Documents
+                  </span>
+                  <input
+                    id="pd-file-input"
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="*/*"
+                    onChange={onPickFiles}
+                    className="pick-zone-input"
+                  />
+                </label>
               ) : (
-                <button
-                  className="pick-zone pick-zone-compact"
-                  onClick={() => setShowFilePicker(true)}
-                  aria-label="Add more files"
-                >
+                <label className="pick-zone pick-zone-compact" htmlFor="pd-file-input-more">
                   <span style={{ fontSize: "1.4rem" }}>＋</span>
                   <span>Add more files</span>
-                </button>
+                  <input
+                    id="pd-file-input-more"
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="*/*"
+                    onChange={onPickFiles}
+                    className="pick-zone-input"
+                  />
+                </label>
               )}
 
               <div className="list">
