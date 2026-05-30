@@ -37,13 +37,14 @@ services:
           type: redis
           property: connectionString
 
+  # Redis must be under "services", not "databases"
+  - type: redis
+    name: peerdash-redis
+    plan: free
+    ipAllowList: []
+
 databases:
   - name: peerdash-db
     plan: free
     databaseName: peerdash
     user: peerdash
-
-  - type: redis
-    name: peerdash-redis
-    plan: free
-    ipAllowList: []
