@@ -991,6 +991,99 @@ progress::-moz-progress-bar {
   to   { transform: translateY(0);    opacity: 1; }
 }
 
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── InShare-style big "Add Files" button ── */
+.inshare-add-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 200px;
+  margin: 1rem 0;
+  border-radius: 24px;
+  border: 2px dashed rgba(55, 212, 170, 0.35);
+  background: rgba(55, 212, 170, 0.04);
+  cursor: pointer;
+  color: inherit;
+  transition: all 0.25s ease;
+  animation: pickZonePulse 3s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+  padding: 2rem 1rem;
+}
+
+.inshare-add-btn:hover,
+.inshare-add-btn:active {
+  border-color: rgba(55, 212, 170, 0.7);
+  background: rgba(55, 212, 170, 0.1);
+  transform: scale(1.01);
+}
+
+.inshare-add-icon {
+  font-size: 3.5rem;
+  font-weight: 300;
+  line-height: 1;
+  background: linear-gradient(135deg, #37d4aa, #4095ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.inshare-add-label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.inshare-add-sub {
+  font-size: 0.82rem;
+  color: rgba(244, 247, 251, 0.5);
+  text-align: center;
+}
+
+:root[data-theme='light'] .inshare-add-btn {
+  border-color: rgba(55, 212, 170, 0.4);
+  background: rgba(55, 212, 170, 0.05);
+}
+
+:root[data-theme='light'] .inshare-add-sub {
+  color: rgba(8, 17, 29, 0.45);
+}
+
+/* Compact "add more" bar when files already queued */
+.inshare-add-more-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 52px;
+  margin: 0.5rem 0;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(55, 212, 170, 0.35);
+  background: rgba(55, 212, 170, 0.04);
+  cursor: pointer;
+  color: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0.75rem 1.5rem;
+}
+
+.inshare-add-more-btn:hover,
+.inshare-add-more-btn:active {
+  border-color: rgba(55, 212, 170, 0.6);
+  background: rgba(55, 212, 170, 0.1);
+  transform: scale(1.01);
+}
+
 .picker-backdrop {
   position: fixed;
   inset: 0;

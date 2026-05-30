@@ -210,6 +210,7 @@ function App() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [showFilePicker, setShowFilePicker] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const iceServersRef = useRef<RTCIceServer[]>(DEFAULT_ICE);
@@ -988,39 +989,33 @@ function App() {
                 </div>
               </div>
 
-              {/* ── Direct label→input: zero JS, works on every Android browser ── */}
+              {/* ── Hidden native inputs — each opens the matching OS picker ── */}
+              <input ref={photoInputRef}  id="pd-photo-input"  type="file" multiple accept="image/*"  onChange={onPickFiles} style={{ display: "none" }} />
+              <input ref={videoInputRef}  id="pd-video-input"  type="file" multiple accept="video/*"  onChange={onPickFiles} style={{ display: "none" }} />
+              <input ref={fileInputRef}   id="pd-file-input"   type="file" multiple accept="*/*"     onChange={onPickFiles} style={{ display: "none" }} />
+              <input ref={folderInputRef} id="pd-folder-input" type="file" multiple onChange={onPickFiles} style={{ display: "none" }} />
+              <input ref={cameraInputRef} id="pd-camera-input" type="file" accept="image/*,video/*" capture="environment" onChange={onPickFiles} style={{ display: "none" }} />
+
+              {/* ── InShare-style big tap target ── */}
               {files.length === 0 ? (
-                <label className="pick-zone" htmlFor="pd-file-input" aria-label="Add files to send">
-                  <span className="pick-zone-icon">＋</span>
-                  <span className="pick-zone-label">Tap to choose files</span>
-                  <span className="pick-zone-sub">Opens your file manager directly</span>
-                  <span className="pick-zone-sub" style={{ marginTop: "0.25rem", opacity: 0.45 }}>
-                    Any file · Photos · Videos · Documents
-                  </span>
-                  <input
-                    id="pd-file-input"
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="*/*"
-                    onChange={onPickFiles}
-                    className="pick-zone-input"
-                  />
-                </label>
+                <button
+                  className="inshare-add-btn"
+                  onClick={() => setShowFilePicker(true)}
+                  aria-label="Add files"
+                >
+                  <span className="inshare-add-icon">+</span>
+                  <span className="inshare-add-label">Add Files</span>
+                  <span className="inshare-add-sub">Photos · Videos · Documents · Camera</span>
+                </button>
               ) : (
-                <label className="pick-zone pick-zone-compact" htmlFor="pd-file-input-more">
-                  <span style={{ fontSize: "1.4rem" }}>＋</span>
-                  <span>Add more files</span>
-                  <input
-                    id="pd-file-input-more"
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="*/*"
-                    onChange={onPickFiles}
-                    className="pick-zone-input"
-                  />
-                </label>
+                <button
+                  className="inshare-add-more-btn"
+                  onClick={() => setShowFilePicker(true)}
+                  aria-label="Add more files"
+                >
+                  <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>+</span>
+                  <span>Add more</span>
+                </button>
               )}
 
               <div className="list">
@@ -1051,6 +1046,67 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* ── InShare-style bottom-sheet file picker ── */}
+        {showFilePicker && (
+          <div
+            className="picker-backdrop"
+            onClick={e => { if (e.target === e.currentTarget) setShowFilePicker(false); }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose file source"
+          >
+            <div className="picker-sheet">
+              <div className="picker-handle" />
+              <p className="picker-title">Send files</p>
+              <div className="picker-grid">
+
+                {/* Images */}
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); photoInputRef.current?.click(); }}
+                >
+                  <span className="picker-icon">🖼️</span>
+                  <span>Images</span>
+                </button>
+
+                {/* Videos */}
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); videoInputRef.current?.click(); }}
+                >
+                  <span className="picker-icon">🎬</span>
+                  <span>Videos</span>
+                </button>
+
+                {/* Files / Docs */}
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); fileInputRef.current?.click(); }}
+                >
+                  <span className="picker-icon">📄</span>
+                  <span>Files</span>
+                </button>
+
+                {/* Camera */}
+                <button
+                  className="picker-opt"
+                  onClick={() => { setShowFilePicker(false); cameraInputRef.current?.click(); }}
+                >
+                  <span className="picker-icon">📷</span>
+                  <span>Camera</span>
+                </button>
+
+              </div>
+              <button
+                className="picker-cancel"
+                onClick={() => setShowFilePicker(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Receive */}

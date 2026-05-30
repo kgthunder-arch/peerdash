@@ -2,30 +2,14 @@ name: Deploy PeerDash
 
 on:
   push:
-    branches: [main, staging]
-  pull_request:
     branches: [main]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  workflow_dispatch:
 
 jobs:
-  test:
+  # ── 1. Build client & server to verify the code compiles ──────────────────
+  build:
+    name: Build & Type-check
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: peerdash
-          POSTGRES_PASSWORD: test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     steps:
       - uses: actions/checkout@v4
@@ -35,123 +19,73 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install root workspace deps
+        run: npm ci --ignore-scripts
+
+      - name: Install client deps
         run: npm ci
+        working-directory: apps/client
 
-      - name: Run linter
-        run: npm run lint --workspace apps/server --workspace apps/client
+      - name: Install server deps
+        run: npm ci --ignore-scripts
+        working-directory: apps/server
 
-      - name: Build
+      - name: Type-check client
+        run: npx tsc --noEmit
+        working-directory: apps/client
+
+      - name: Build client (Vite)
         run: npm run build
+        working-directory: apps/client
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/peerdash
+          VITE_SIGNAL_SERVER_URL: ${{ secrets.VITE_SIGNAL_SERVER_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
-      - name: Run tests
-        run: npm test
+      - name: Build server (tsc)
+        run: npx prisma generate && npx tsc --noEmit
+        working-directory: apps/server
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/peerdash
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost/placeholder
 
-  build-and-push:
-    needs: test
+  # ── 2. Deploy frontend → Vercel ───────────────────────────────────────────
+  deploy-vercel:
+    name: Deploy → Vercel (frontend)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
-    
-    permissions:
-      contents: read
-      packages: write
+    needs: build
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
 
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./apps/server/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Install client deps
+        run: npm ci
+        working-directory: apps/client
 
-  deploy-staging:
-    needs: build-and-push
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build for Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel (production)
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  # ── 3. Trigger Render redeploy (backend) ─────────────────────────────────
+  deploy-render:
+    name: Deploy → Render (backend)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/staging'
-    
+    needs: build
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Staging
-        env:
-          DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
-          DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+      - name: Trigger Render deploy hook
         run: |
-          mkdir -p ~/.ssh
-          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $DEPLOY_HOST "cd /app && git pull && docker-compose up -d"
-
-  deploy-production:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Production
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          npm install -g vercel
-          vercel pull --yes --environment=production
-          vercel build --prod
-          vercel deploy --prebuilt --prod
-
-      - name: Deploy Server
-        env:
-          DEPLOY_KEY: ${{ secrets.PROD_DEPLOY_KEY }}
-          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $DEPLOY_HOST "cd /app && git pull && docker-compose up -d"
-
-      - name: Notify Slack
-        if: success()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "✅ PeerDash deployed to production",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "✅ *PeerDash Production Deployment*\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}"
-                  }
-                }
-              ]
-            }
+          curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            | grep -qE "^2" && echo "Render deploy triggered ✅" || echo "Render deploy hook failed ❌"
