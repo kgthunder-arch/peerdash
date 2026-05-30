@@ -10,11 +10,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "react-vendor": ["react", "react-dom"],
-          "socket-vendor": ["socket.io-client"],
-          "peer-vendor": ["peerjs"],
-          "zip-vendor": ["jszip"],
+        manualChunks: (id) => {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "react-vendor";
+          if (id.includes("node_modules/socket.io-client")) return "socket-vendor";
+          if (id.includes("node_modules/peerjs")) return "peer-vendor";
+          if (id.includes("node_modules/jszip")) return "zip-vendor";
         }
       }
     }
