@@ -5,7 +5,8 @@ services:
     plan: free
     rootDir: apps/server
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: sh start.sh
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -16,7 +17,7 @@ services:
       - key: CORS_ORIGIN
         sync: false
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: JWT_EXPIRY
         value: 15m
       - key: REFRESH_TOKEN_EXPIRY
