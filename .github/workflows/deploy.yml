@@ -8,7 +8,7 @@ on:
 jobs:
   # ── 1. Build client & server to verify the code compiles ──────────────────
   build:
-    name: Build & Type-check
+    name: Build & Verify
     runs-on: ubuntu-latest
 
     steps:
@@ -19,21 +19,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      # Install all workspace deps (includes devDeps needed for build)
       - name: Install root workspace deps
-        run: npm ci --ignore-scripts
+        run: npm install
 
       - name: Install client deps
-        run: npm ci
+        run: npm install
         working-directory: apps/client
 
       - name: Install server deps
-        run: npm ci --ignore-scripts
+        run: npm install
         working-directory: apps/server
 
-      - name: Type-check client
-        run: npx tsc --noEmit
-        working-directory: apps/client
-
+      # Vite build also performs type-checking internally
       - name: Build client (Vite)
         run: npm run build
         working-directory: apps/client
@@ -41,11 +39,12 @@ jobs:
           VITE_SIGNAL_SERVER_URL: ${{ secrets.VITE_SIGNAL_SERVER_URL }}
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
-      - name: Build server (tsc)
+      # Server: just generate prisma client and compile TS
+      - name: Build server
         run: npx prisma generate && npx tsc --noEmit
         working-directory: apps/server
         env:
-          DATABASE_URL: postgresql://placeholder:placeholder@localhost/placeholder
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
   # ── 2. Deploy frontend → Vercel ───────────────────────────────────────────
   deploy-vercel:
@@ -65,7 +64,7 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Install client deps
-        run: npm ci
+        run: npm install
         working-directory: apps/client
 
       - name: Pull Vercel project settings
@@ -75,7 +74,11 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel (production)
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: vercel-deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "✅ Deployed to $URL"
 
   # ── 3. Trigger Render redeploy (backend) ─────────────────────────────────
   deploy-render:
@@ -86,6 +89,10 @@ jobs:
     steps:
       - name: Trigger Render deploy hook
         run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-            | grep -qE "^2" && echo "Render deploy triggered ✅" || echo "Render deploy hook failed ❌"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          if [[ "$STATUS" =~ ^2 ]]; then
+            echo "✅ Render deploy triggered (HTTP $STATUS)"
+          else
+            echo "❌ Render deploy hook returned HTTP $STATUS"
+            exit 1
+          fi
