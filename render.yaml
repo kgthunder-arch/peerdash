@@ -9,7 +9,7 @@ services:
     healthCheckPath: /health
 
     envVars:
-      # ── Server ──────────────────────────────────────────────────────────────
+      # Server
       - key: NODE_ENV
         value: production
 
@@ -17,14 +17,14 @@ services:
         value: 3001
 
       - key: API_BASE_URL
-        sync: false   # e.g. https://peerdash-api.onrender.com
+        sync: false # e.g. https://peerdash-api.onrender.com
 
       - key: CORS_ORIGIN
-        sync: false   # e.g. https://peerdash.vercel.app  (comma-sep for multiple)
+        sync: false # e.g. https://peerdash.vercel.app (comma-separated for multiple)
 
-      # ── Auth ─────────────────────────────────────────────────────────────────
+      # Auth
       - key: JWT_SECRET
-        generateValue: true   # auto-generated 32-byte random value
+        generateValue: true # auto-generated 32-byte random value
 
       - key: JWT_EXPIRY
         value: 15m
@@ -38,34 +38,31 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
 
-      # ── Logging ──────────────────────────────────────────────────────────────
+      # Logging
       - key: LOG_LEVEL
         value: info
 
-      # ── Supabase (REQUIRED — set these in the Render dashboard) ──────────────
+      # Supabase/Postgres (required: set these in the Render dashboard)
       #
-      #   DATABASE_URL  → Transaction-pooler connection string
-      #                   Supabase Dashboard → Settings → Database →
-      #                   "Connection string" tab → "Transaction" mode
-      #                   Port: 6543
-      #                   Append to the URL: ?pgbouncer=true&connection_limit=1
+      # DATABASE_URL -> Transaction-pooler connection string.
+      #                 Supabase Dashboard -> Settings -> Database ->
+      #                 Connection string -> Transaction mode, port 6543.
+      #                 Append: ?pgbouncer=true&connection_limit=1
       #
-      #   DIRECT_URL    → Direct (non-pooled) connection string
-      #                   Same page → "Session" mode
-      #                   Port: 5432
-      #                   Used by prisma db push / migrate at startup
-      #
+      # DIRECT_URL   -> Direct non-pooled connection string.
+      #                 Same page -> Session mode, port 5432.
+      #                 Used by prisma db push at startup.
       - key: DATABASE_URL
         sync: false
 
       - key: DIRECT_URL
         sync: false
 
-      # ── Upstash Redis (optional — set in dashboard if you use Redis) ──────────
+      # Upstash Redis (optional: set in dashboard if you use Redis)
       - key: REDIS_URL
-        sync: false   # rediss://:password@host:port  (Upstash → REST API → rediss URL)
+        sync: false # rediss://:password@host:port
 
-      # ── Stripe (optional — set only if payments are enabled) ─────────────────
+      # Stripe (optional: set only if payments are enabled)
       - key: STRIPE_SECRET_KEY
         sync: false
 
