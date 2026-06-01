@@ -7,45 +7,73 @@ services:
     buildCommand: npm install && npm run build
     startCommand: sh start.sh
     healthCheckPath: /health
+
     envVars:
+      # ── Server ──────────────────────────────────────────────────────────────
       - key: NODE_ENV
         value: production
+
       - key: PORT
         value: 3001
+
       - key: API_BASE_URL
-        sync: false
+        sync: false   # e.g. https://peerdash-api.onrender.com
+
       - key: CORS_ORIGIN
-        sync: false
+        sync: false   # e.g. https://peerdash.vercel.app  (comma-sep for multiple)
+
+      # ── Auth ─────────────────────────────────────────────────────────────────
       - key: JWT_SECRET
-        generateValue: true
+        generateValue: true   # auto-generated 32-byte random value
+
       - key: JWT_EXPIRY
         value: 15m
+
       - key: REFRESH_TOKEN_EXPIRY
         value: 7d
+
       - key: GOOGLE_CLIENT_ID
         sync: false
+
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+
+      # ── Logging ──────────────────────────────────────────────────────────────
       - key: LOG_LEVEL
         value: info
+
+      # ── Supabase (REQUIRED — set these in the Render dashboard) ──────────────
+      #
+      #   DATABASE_URL  → Transaction-pooler connection string
+      #                   Supabase Dashboard → Settings → Database →
+      #                   "Connection string" tab → "Transaction" mode
+      #                   Port: 6543
+      #                   Append to the URL: ?pgbouncer=true&connection_limit=1
+      #
+      #   DIRECT_URL    → Direct (non-pooled) connection string
+      #                   Same page → "Session" mode
+      #                   Port: 5432
+      #                   Used by prisma db push / migrate at startup
+      #
       - key: DATABASE_URL
-        fromDatabase:
-          name: peerdash-db
-          property: connectionString
+        sync: false
+
+      - key: DIRECT_URL
+        sync: false
+
+      # ── Upstash Redis (optional — set in dashboard if you use Redis) ──────────
       - key: REDIS_URL
-        fromService:
-          name: peerdash-redis
-          type: redis
-          property: connectionString
+        sync: false   # rediss://:password@host:port  (Upstash → REST API → rediss URL)
 
-  # Redis must be under "services", not "databases"
-  - type: redis
-    name: peerdash-redis
-    plan: free
-    ipAllowList: []
+      # ── Stripe (optional — set only if payments are enabled) ─────────────────
+      - key: STRIPE_SECRET_KEY
+        sync: false
 
-databases:
-  - name: peerdash-db
-    plan: free
-    databaseName: peerdash
-    user: peerdash
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+
+      - key: STRIPE_ENTERPRISE_PRICE_ID
+        sync: false

@@ -17,6 +17,31 @@ import { verifyGoogleAccessToken, verifyGoogleCode, verifyGoogleIdToken, verifyA
 
 dotenv.config();
 
+// ─── Required env-var validation (runs before Prisma initialises) ─────────────
+(function validateEnv() {
+  const REQUIRED: Record<string, string> = {
+    DATABASE_URL: "Supabase transaction-pooler URL (port 6543, ?pgbouncer=true&connection_limit=1)",
+    DIRECT_URL:   "Supabase direct URL (port 5432, no pgbouncer)",
+    JWT_SECRET:   "Random string ≥ 32 chars — generate with: openssl rand -base64 32",
+  };
+
+  const missing = Object.entries(REQUIRED).filter(([k]) => !process.env[k]);
+
+  if (missing.length > 0) {
+    console.error("\n╔══════════════════════════════════════════════════════════════╗");
+    console.error("║  SERVER STARTUP ABORTED — missing environment variables      ║");
+    console.error("╠══════════════════════════════════════════════════════════════╣");
+    missing.forEach(([key, hint]) => {
+      console.error(`║  ✗ ${key.padEnd(28)} │ ${hint.slice(0, 26)}`);
+    });
+    console.error("╠══════════════════════════════════════════════════════════════╣");
+    console.error("║  Fix: Render dashboard → peerdash-api → Environment          ║");
+    console.error("║       Add each missing key listed above.                     ║");
+    console.error("╚══════════════════════════════════════════════════════════════╝\n");
+    process.exit(1);
+  }
+})();
+
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
