@@ -20,8 +20,7 @@ dotenv.config();
 // ─── Required env-var validation (runs before Prisma initialises) ─────────────
 (function validateEnv() {
   const REQUIRED: Record<string, string> = {
-    DATABASE_URL: "Supabase transaction-pooler URL (port 6543, ?pgbouncer=true&connection_limit=1)",
-    DIRECT_URL:   "Supabase direct URL (port 5432, no pgbouncer)",
+    DATABASE_URL: "Supabase/Postgres connection URL (postgresql://...)",
     JWT_SECRET:   "Random string ≥ 32 chars — generate with: openssl rand -base64 32",
   };
 

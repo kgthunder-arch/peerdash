@@ -2,6 +2,9 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL")  ← uncomment if you set DIRECT_URL in Render
+  //   Use the Supabase direct URL (port 5432) here so that migrations
+  //   bypass pgbouncer. Required only when DATABASE_URL uses port 6543 pooler.
 }
 
 generator client {
