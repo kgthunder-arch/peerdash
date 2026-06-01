@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── 1. Build client & server to verify the code compiles ──────────────────
+  # ── 1. Build & verify ────────────────────────────────────────────────────────
   build:
     name: Build & Verify
     runs-on: ubuntu-latest
@@ -19,8 +19,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Install all workspace deps (includes devDeps needed for build)
-      - name: Install root workspace deps
+      - name: Install root deps
         run: npm install
 
       - name: Install client deps
@@ -31,22 +30,22 @@ jobs:
         run: npm install
         working-directory: apps/server
 
-      # Vite build also performs type-checking internally
       - name: Build client (Vite)
         run: npm run build
         working-directory: apps/client
         env:
           VITE_SIGNAL_SERVER_URL: ${{ secrets.VITE_SIGNAL_SERVER_URL }}
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
 
-      # Server: just generate prisma client and compile TS
-      - name: Build server
-        run: npx prisma generate && npx tsc --noEmit
+      - name: Build server (Prisma generate + tsc)
+        run: npm run build
         working-directory: apps/server
         env:
+          # Placeholder so prisma generate doesn't fail — no real DB needed at build time
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
-  # ── 2. Deploy frontend → Vercel ───────────────────────────────────────────
+  # ── 2. Deploy frontend → Vercel ──────────────────────────────────────────────
   deploy-vercel:
     name: Deploy → Vercel (frontend)
     runs-on: ubuntu-latest
@@ -72,6 +71,10 @@ jobs:
 
       - name: Build for Vercel
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VITE_SIGNAL_SERVER_URL: ${{ secrets.VITE_SIGNAL_SERVER_URL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
 
       - name: Deploy to Vercel (production)
         id: vercel-deploy
@@ -80,19 +83,133 @@ jobs:
           echo "url=$URL" >> $GITHUB_OUTPUT
           echo "✅ Deployed to $URL"
 
-  # ── 3. Trigger Render redeploy (backend) ─────────────────────────────────
+  # ── 3. Deploy backend → Render ───────────────────────────────────────────────
   deploy-render:
     name: Deploy → Render (backend)
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: Trigger Render deploy hook
+      # ── 3a. Sync env vars to Render via API ──────────────────────────────────
+      # This keeps Render's env vars in sync with GitHub Secrets automatically.
+      # Add any new secrets here AND to your GitHub repo secrets.
+      - name: Sync env vars to Render
+        env:
+          RENDER_API_KEY:    ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "Syncing environment variables to Render service $RENDER_SERVICE_ID …"
+
+          # Build JSON array of env vars to upsert.
+          # Only includes vars that are actually set as GitHub secrets.
+          VARS='['
+
+          append_var() {
+            local KEY="$1"
+            local VAL="$2"
+            if [ -n "$VAL" ]; then
+              VARS="${VARS}{\"key\":\"${KEY}\",\"value\":$(echo "$VAL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().rstrip()))')},"
+            fi
+          }
+
+          append_var "NODE_ENV"             "production"
+          append_var "PORT"                 "3001"
+          append_var "LOG_LEVEL"            "info"
+          append_var "JWT_EXPIRY"           "15m"
+          append_var "REFRESH_TOKEN_EXPIRY" "7d"
+          append_var "DATABASE_URL"         "${{ secrets.DATABASE_URL }}"
+          append_var "DIRECT_URL"           "${{ secrets.DIRECT_URL }}"
+          append_var "CORS_ORIGIN"          "${{ secrets.CORS_ORIGIN }}"
+          append_var "API_BASE_URL"         "${{ secrets.API_BASE_URL }}"
+          append_var "JWT_SECRET"           "${{ secrets.JWT_SECRET }}"
+          append_var "GOOGLE_CLIENT_ID"     "${{ secrets.GOOGLE_CLIENT_ID }}"
+          append_var "GOOGLE_CLIENT_SECRET" "${{ secrets.GOOGLE_CLIENT_SECRET }}"
+          append_var "REDIS_URL"            "${{ secrets.REDIS_URL }}"
+          append_var "STRIPE_SECRET_KEY"    "${{ secrets.STRIPE_SECRET_KEY }}"
+          append_var "STRIPE_WEBHOOK_SECRET" "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+          append_var "STRIPE_PRO_PRICE_ID"  "${{ secrets.STRIPE_PRO_PRICE_ID }}"
+          append_var "STRIPE_ENTERPRISE_PRICE_ID" "${{ secrets.STRIPE_ENTERPRISE_PRICE_ID }}"
+
+          # Remove trailing comma and close array
+          VARS="${VARS%,}]"
+
+          STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            -X PUT \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$VARS" \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars")
+
           if [[ "$STATUS" =~ ^2 ]]; then
-            echo "✅ Render deploy triggered (HTTP $STATUS)"
+            echo "✅ Env vars synced (HTTP $STATUS)"
           else
-            echo "❌ Render deploy hook returned HTTP $STATUS"
+            echo "❌ Failed to sync env vars (HTTP $STATUS)"
+            cat response.json
             exit 1
+          fi
+
+      # ── 3b. Trigger deploy ────────────────────────────────────────────────────
+      - name: Trigger Render deploy
+        env:
+          RENDER_API_KEY:    ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          STATUS=$(curl -s -o deploy.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys")
+
+          if [[ "$STATUS" =~ ^2 ]]; then
+            DEPLOY_ID=$(cat deploy.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["deploy"]["id"])' 2>/dev/null || echo "unknown")
+            echo "✅ Deploy triggered (ID: $DEPLOY_ID, HTTP $STATUS)"
+            echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Deploy trigger failed (HTTP $STATUS)"
+            cat deploy.json
+            exit 1
+          fi
+
+      # ── 3c. Wait for deploy to complete & health check ────────────────────────
+      - name: Wait for Render to go live
+        env:
+          RENDER_API_KEY:    ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          API_BASE_URL:      ${{ secrets.API_BASE_URL }}
+        run: |
+          echo "Waiting for service to become healthy …"
+          DEADLINE=$((SECONDS + 300))   # 5-minute timeout
+
+          while [ $SECONDS -lt $DEADLINE ]; do
+            # Check deploy status via Render API
+            DEPLOY_STATUS=$(curl -s \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["deploy"]["status"])' 2>/dev/null || echo "unknown")
+
+            echo "  Deploy status: $DEPLOY_STATUS"
+
+            if [ "$DEPLOY_STATUS" = "live" ]; then
+              echo "✅ Deploy is live!"
+              break
+            elif [ "$DEPLOY_STATUS" = "deactivated" ] || [ "$DEPLOY_STATUS" = "build_failed" ] || [ "$DEPLOY_STATUS" = "update_failed" ]; then
+              echo "❌ Deploy failed with status: $DEPLOY_STATUS"
+              echo "Check logs: https://dashboard.render.com/web/$RENDER_SERVICE_ID/logs"
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+          # Final health check
+          if [ -n "$API_BASE_URL" ]; then
+            echo "Running health check against $API_BASE_URL/health …"
+            HEALTH=$(curl -sf "$API_BASE_URL/health" || echo "failed")
+            echo "  Response: $HEALTH"
+            if echo "$HEALTH" | grep -q '"ok":true'; then
+              echo "✅ Health check passed!"
+            else
+              echo "⚠️  Health check did not return ok:true — service may still be starting"
+            fi
           fi
