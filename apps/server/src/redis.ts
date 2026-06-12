@@ -3,12 +3,17 @@ import { pino } from "pino";
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
+let redisErrorLogged = false;
+
 export const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://127.0.0.1:6379"
 });
 
 redisClient.on("error", (err: Error) => {
-  logger.error({ err }, "Redis client error");
+  if (!redisErrorLogged) {
+    logger.error({ err }, "Redis client error");
+    redisErrorLogged = true;
+  }
 });
 
 redisClient.on("connect", () => {
