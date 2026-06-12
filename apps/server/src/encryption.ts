@@ -1,5 +1,13 @@
 import * as nacl from "tweetnacl";
-import { encodeBase64, decodeBase64 } from "tweetnacl-util";
+
+// Helper functions for base64 encoding/decoding
+function encodeBase64(buffer: Uint8Array): string {
+  return Buffer.from(buffer).toString('base64');
+}
+
+function decodeBase64(str: string): Uint8Array {
+  return Buffer.from(str, 'base64');
+}
 
 /**
  * Generate a new keypair for encryption
