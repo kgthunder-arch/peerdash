@@ -544,17 +544,16 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function start() {
-  await connectDB();
-  await connectRedis();
-
   httpServer.listen(PORT, "0.0.0.0", () => {
-    logger.info(`🚀 PeerDash Server v2.0 on http://localhost:${PORT}`);
-    logger.info("📡 Signal server ready for WebRTC connections");
+    logger.info(`PeerDash Server v2.0 listening on port ${PORT}`);
+    logger.info("Signal server ready for WebRTC connections");
   });
 
-  // Graceful shutdown
+  void connectDB();
+  void connectRedis();
+
   process.on("SIGTERM", async () => {
-    logger.info("SIGTERM received — shutting down");
+    logger.info("SIGTERM received; shutting down");
     httpServer.close();
     await prisma.$disconnect();
     process.exit(0);

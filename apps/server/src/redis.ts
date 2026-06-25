@@ -26,10 +26,22 @@ export async function connectRedis() {
     return;
   }
 
+  const timeoutMs = Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 5000);
+
   try {
-    await redisClient.connect();
+    await Promise.race([
+      redisClient.connect(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Redis connection timed out after ${timeoutMs}ms`)), timeoutMs);
+      })
+    ]);
   } catch (error) {
     logger.warn({ error }, "Redis unavailable; running without cache/pub-sub");
+    try {
+      await redisClient.disconnect();
+    } catch {
+      // Ignore cleanup failures after a failed optional Redis connection.
+    }
   }
 }
 
